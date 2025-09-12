@@ -1,8 +1,6 @@
 package com.example.test.vnpay;
 
 
-import com.example.test.models.Users;
-import com.example.test.services.UserService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
