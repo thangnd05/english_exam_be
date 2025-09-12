@@ -20,4 +20,7 @@ public class ExamType {
 
     @Column(columnDefinition = "TEXT")
     private String description;
+
+    @Column(nullable = false)
+    private Integer durationMinutes; // thời gian riêng cho part (nếu muốn)
 }

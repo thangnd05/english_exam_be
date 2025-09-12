@@ -22,13 +22,13 @@ public class Test {
     private String description;
 
     @Column(nullable = false)
-    private Integer durationMinutes;
-
-    @Column(nullable = false)
     private Long examTypeId;
 
     private Long createdBy;
 
     private LocalDateTime createdAt = LocalDateTime.now();
+
+    @Column(nullable = true)
+    private Integer durationMinutes; // thời gian riêng cho part (nếu muốn)
 }
 

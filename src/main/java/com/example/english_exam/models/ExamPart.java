@@ -9,7 +9,7 @@ import lombok.*;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class ExamPart{
+public class ExamPart {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -23,4 +23,7 @@ public class ExamPart{
 
     @Column(columnDefinition = "TEXT")
     private String description;
+
+    @Column(name = "default_num_questions")
+    private Integer defaultNumQuestions;
 }
