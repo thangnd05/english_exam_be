@@ -1,8 +1,8 @@
 package com.example.english_exam.controllers;
 
-
 import com.example.english_exam.models.Role;
 import com.example.english_exam.services.RoleService;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -16,27 +16,46 @@ public class RoleController {
         this.roleService = roleService;
     }
 
+    // Lấy tất cả roles
     @GetMapping
-    public List<Role> getAllRoles() {
-        return roleService.getAllRoles();
+    public ResponseEntity<List<Role>> getAllRoles() {
+        return ResponseEntity.ok(roleService.getAllRoles());
     }
 
+    // Lấy role theo id
     @GetMapping("/{id}")
-    public Role getRole(@PathVariable Long id) {
-        return roleService.getRoleById(id);
+    public ResponseEntity<Role> getRoleById(@PathVariable Long id) {
+        return roleService.getRoleById(id)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
     }
 
+    // Tạo mới role
     @PostMapping
-    public Role createRole(@RequestBody Role role) {
-        return roleService.createRole(role);
-    }
-    @PutMapping("/{id}")
-    public Role updateRole(@PathVariable Long id, @RequestBody Role roleDetails) {
-        return roleService.updateRole(id, roleDetails);
+    public ResponseEntity<Role> createRole(@RequestBody Role role) {
+        Role savedRole = roleService.save(role);
+        return ResponseEntity.ok(savedRole);
     }
 
+    // Cập nhật role
+    @PutMapping("/{id}")
+    public ResponseEntity<Role> updateRole(@PathVariable Long id, @RequestBody Role updatedRole) {
+        return roleService.getRoleById(id)
+                .map(existing -> {
+                    updatedRole.setRoleId(id);
+                    return ResponseEntity.ok(roleService.save(updatedRole));
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    // Xóa role
     @DeleteMapping("/{id}")
-    public void deleteRole(@PathVariable Long id) {
-        roleService.deleteRole(id);
+    public ResponseEntity<?> deleteRole(@PathVariable Long id) {
+        return roleService.getRoleById(id)
+                .map(existing -> {
+                    roleService.deleteRole(id);
+                    return ResponseEntity.noContent().build();
+                })
+                .orElse(ResponseEntity.notFound().build());
     }
 }

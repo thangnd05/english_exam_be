@@ -24,20 +24,10 @@ public class UserService {
         return userRepository.findById(id);
     }
 
-    public User createUser(User user) {
+    public User save(User user) {
         return userRepository.save(user);
     }
 
-    public Optional<User> updateUser(Long id, User updatedUser) {
-        return userRepository.findById(id).map(user -> {
-            user.setUserName(updatedUser.getUserName());
-            user.setFullName(updatedUser.getFullName());
-            user.setEmail(updatedUser.getEmail());
-            user.setPassword(updatedUser.getPassword());
-            user.setRoleId(updatedUser.getRoleId());
-            return userRepository.save(user);
-        });
-    }
 
     public boolean deleteUser(Long id) {
         return userRepository.findById(id).map(user -> {

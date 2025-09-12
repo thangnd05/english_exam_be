@@ -17,13 +17,13 @@ public class UserController {
         this.userService = userService;
     }
 
-    // Lấy tất cả user
+    // Lấy danh sách user
     @GetMapping
-    public List<User> getAllUsers() {
-        return userService.findAll();
+    public ResponseEntity<List<User>> getAllUsers() {
+        return ResponseEntity.ok(userService.findAll());
     }
 
-    // Lấy user theo ID
+    // Lấy user theo id
     @GetMapping("/{id}")
     public ResponseEntity<User> getUserById(@PathVariable Long id) {
         return userService.findById(id)
@@ -33,23 +33,25 @@ public class UserController {
 
     // Tạo mới user
     @PostMapping
-    public User createUser(@RequestBody User user) {
-        return userService.createUser(user);
+    public ResponseEntity<User> createUser(@RequestBody User user) {
+        return ResponseEntity.ok(userService.save(user));
     }
 
+    // Cập nhật user
     @PutMapping("/{id}")
-    public ResponseEntity<User> updateUser(@PathVariable Long id, @RequestBody User user) {
-        return userService.updateUser(id, user)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+    public ResponseEntity<User> updateUser(@PathVariable Long id, @RequestBody User updatedUser) {
+        updatedUser.setUserId(id);
+        return ResponseEntity.ok(userService.save(updatedUser));
     }
 
     // Xóa user
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteUser(@PathVariable Long id) {
-        if (userService.deleteUser(id)) {
-            return ResponseEntity.noContent().build();
-        }
-        return ResponseEntity.notFound().build();
+    public ResponseEntity<?> deleteUser(@PathVariable Long id) {
+        return userService.findById(id)
+                .map(existing -> {
+                    userService.deleteUser(id);
+                    return ResponseEntity.noContent().build(); // 204 No Content
+                })
+                .orElse(ResponseEntity.notFound().build()); // 404 Not Found
     }
 }

@@ -4,6 +4,7 @@ import com.example.english_exam.models.Role;
 import com.example.english_exam.repositories.RoleRepository;
 import org.springframework.stereotype.Service;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class RoleService {
@@ -17,23 +18,15 @@ public class RoleService {
         return roleRepository.findAll();
     }
 
-    public Role getRoleById(Long id) {
-        return roleRepository.findById(id).orElse(null);
+    public Optional<Role> getRoleById(Long id) {
+        return roleRepository.findById(id);
     }
 
-    public Role createRole(Role role) {
+    public Role save(Role role) {
         return roleRepository.save(role);
     }
 
-    public Role updateRole(Long id, Role roleDetails) {
-        return roleRepository.findById(id)
-                .map(role -> {
-                    role.setRoleName(roleDetails.getRoleName());
-                    role.setDescription(roleDetails.getDescription());
-                    return roleRepository.save(role);
-                })
-                .orElse(null);
-    }
+
 
     public void deleteRole(Long id) {
         roleRepository.deleteById(id);
