@@ -33,7 +33,7 @@ public class DataLoader implements CommandLineRunner {
         }
 
         // Kiểm tra user admin
-        Optional<Users> adminUser = userRepository.findByUserName("admin");
+        Optional<Users> adminUser = userRepository.findByUserName("WinDe");
         if(adminUser.isEmpty()){
             Users user = new Users();
             user.setUserName("WinDe");
