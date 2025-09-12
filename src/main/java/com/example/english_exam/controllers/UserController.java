@@ -1,6 +1,6 @@
 package com.example.english_exam.controllers;
 
-import com.example.english_exam.models.Users;
+import com.example.english_exam.models.User;
 import com.example.english_exam.services.UserService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -19,13 +19,13 @@ public class UserController {
 
     // Lấy tất cả user
     @GetMapping
-    public List<Users> getAllUsers() {
+    public List<User> getAllUsers() {
         return userService.findAll();
     }
 
     // Lấy user theo ID
     @GetMapping("/{id}")
-    public ResponseEntity<Users> getUserById(@PathVariable Long id) {
+    public ResponseEntity<User> getUserById(@PathVariable Long id) {
         return userService.findById(id)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
@@ -33,13 +33,12 @@ public class UserController {
 
     // Tạo mới user
     @PostMapping
-    public Users createUser(@RequestBody Users user) {
+    public User createUser(@RequestBody User user) {
         return userService.createUser(user);
     }
 
-    // Cập nhật user
     @PutMapping("/{id}")
-    public ResponseEntity<Users> updateUser(@PathVariable Long id, @RequestBody Users user) {
+    public ResponseEntity<User> updateUser(@PathVariable Long id, @RequestBody User user) {
         return userService.updateUser(id, user)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());

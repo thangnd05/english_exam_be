@@ -1,12 +1,12 @@
 package com.example.english_exam.repositories;
 
-import com.example.english_exam.models.ExamParts;
+import com.example.english_exam.models.ExamPart;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
 
 @Repository
-public interface ExamPartRepository extends JpaRepository<ExamParts, Long> {
-    List<ExamParts> findByExamTypeId(Long examTypeId);
+public interface ExamPartRepository extends JpaRepository<ExamPart, Long> {
+    List<ExamPart> findByExamTypeId(Long examTypeId);
 }

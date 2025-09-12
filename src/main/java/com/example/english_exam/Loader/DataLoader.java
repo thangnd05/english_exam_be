@@ -1,7 +1,7 @@
 package com.example.english_exam.Loader;
 
-import com.example.english_exam.models.Roles;
-import com.example.english_exam.models.Users;
+import com.example.english_exam.models.Role;
+import com.example.english_exam.models.User;
 import com.example.english_exam.repositories.RoleRepository;
 import com.example.english_exam.repositories.UserRepository;
 import org.springframework.boot.CommandLineRunner;
@@ -24,18 +24,18 @@ public class DataLoader implements CommandLineRunner {
     @Override
     public void run(String... args) throws Exception {
         // Kiểm tra xem role admin đã tồn tại chưa
-        Roles adminRole = roleRepository.findByRoleName("ADMIN");
+        Role adminRole = roleRepository.findByRoleName("ADMIN");
         if (adminRole == null) {
-            adminRole = new Roles();
+            adminRole = new Role();
             adminRole.setRoleName("ADMIN");
             adminRole.setDescription("Quyền quản trị viên");
             roleRepository.save(adminRole);
         }
 
         // Kiểm tra user admin
-        Optional<Users> adminUser = userRepository.findByUserName("WinDe");
+        Optional<User> adminUser = userRepository.findByUserName("WinDe");
         if(adminUser.isEmpty()){
-            Users user = new Users();
+            User user = new User();
             user.setUserName("WinDe");
             user.setFullName("WinDe");
             user.setEmail("winde");

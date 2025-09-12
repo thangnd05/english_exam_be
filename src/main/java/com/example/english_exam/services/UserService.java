@@ -1,6 +1,6 @@
 package com.example.english_exam.services;
 
-import com.example.english_exam.models.Users;
+import com.example.english_exam.models.User;
 import com.example.english_exam.repositories.UserRepository;
 import org.springframework.stereotype.Service;
 
@@ -16,19 +16,19 @@ public class UserService {
         this.userRepository = userRepository;
     }
 
-    public List<Users> findAll() {
+    public List<User> findAll() {
         return userRepository.findAll();
     }
 
-    public Optional<Users> findById(Long id) {
+    public Optional<User> findById(Long id) {
         return userRepository.findById(id);
     }
 
-    public Users createUser(Users user) {
+    public User createUser(User user) {
         return userRepository.save(user);
     }
 
-    public Optional<Users> updateUser(Long id, Users updatedUser) {
+    public Optional<User> updateUser(Long id, User updatedUser) {
         return userRepository.findById(id).map(user -> {
             user.setUserName(updatedUser.getUserName());
             user.setFullName(updatedUser.getFullName());

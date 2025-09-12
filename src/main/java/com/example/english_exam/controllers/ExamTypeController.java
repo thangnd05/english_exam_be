@@ -1,6 +1,6 @@
 package com.example.english_exam.controllers;
 
-import com.example.english_exam.models.ExamTypes;
+import com.example.english_exam.models.ExamType;
 import com.example.english_exam.services.ExamTypeService;
 import org.springframework.web.bind.annotation.*;
 
@@ -18,22 +18,22 @@ public class ExamTypeController {
     }
 
     @GetMapping
-    public List<ExamTypes> getAll() {
+    public List<ExamType> getAll() {
         return examTypeService.findAll();
     }
 
     @GetMapping("/{id}")
-    public Optional<ExamTypes> getById(@PathVariable Long id) {
+    public Optional<ExamType> getById(@PathVariable Long id) {
         return examTypeService.findById(id);
     }
 
     @PostMapping
-    public ExamTypes create(@RequestBody ExamTypes examType) {
+    public ExamType create(@RequestBody ExamType examType) {
         return examTypeService.save(examType);
     }
 
     @PutMapping("/{id}")
-    public ExamTypes update(@PathVariable Long id, @RequestBody ExamTypes examType) {
+    public ExamType update(@PathVariable Long id, @RequestBody ExamType examType) {
         examType.setExamTypeId(id);
         return examTypeService.save(examType);
     }

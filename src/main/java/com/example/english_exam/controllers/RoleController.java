@@ -1,7 +1,7 @@
 package com.example.english_exam.controllers;
 
 
-import com.example.english_exam.models.Roles;
+import com.example.english_exam.models.Role;
 import com.example.english_exam.services.RoleService;
 import org.springframework.web.bind.annotation.*;
 
@@ -17,21 +17,21 @@ public class RoleController {
     }
 
     @GetMapping
-    public List<Roles> getAllRoles() {
+    public List<Role> getAllRoles() {
         return roleService.getAllRoles();
     }
 
     @GetMapping("/{id}")
-    public Roles getRole(@PathVariable Long id) {
+    public Role getRole(@PathVariable Long id) {
         return roleService.getRoleById(id);
     }
 
     @PostMapping
-    public Roles createRole(@RequestBody Roles role) {
+    public Role createRole(@RequestBody Role role) {
         return roleService.createRole(role);
     }
     @PutMapping("/{id}")
-    public Roles updateRole(@PathVariable Long id, @RequestBody Roles roleDetails) {
+    public Role updateRole(@PathVariable Long id, @RequestBody Role roleDetails) {
         return roleService.updateRole(id, roleDetails);
     }
 

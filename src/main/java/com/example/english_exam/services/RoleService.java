@@ -1,6 +1,6 @@
 package com.example.english_exam.services;
 
-import com.example.english_exam.models.Roles;
+import com.example.english_exam.models.Role;
 import com.example.english_exam.repositories.RoleRepository;
 import org.springframework.stereotype.Service;
 import java.util.List;
@@ -13,19 +13,19 @@ public class RoleService {
         this.roleRepository = roleRepository;
     }
 
-    public List<Roles> getAllRoles() {
+    public List<Role> getAllRoles() {
         return roleRepository.findAll();
     }
 
-    public Roles getRoleById(Long id) {
+    public Role getRoleById(Long id) {
         return roleRepository.findById(id).orElse(null);
     }
 
-    public Roles createRole(Roles role) {
+    public Role createRole(Role role) {
         return roleRepository.save(role);
     }
 
-    public Roles updateRole(Long id, Roles roleDetails) {
+    public Role updateRole(Long id, Role roleDetails) {
         return roleRepository.findById(id)
                 .map(role -> {
                     role.setRoleName(roleDetails.getRoleName());

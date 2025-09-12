@@ -1,6 +1,6 @@
 package com.example.english_exam.services;
 
-import com.example.english_exam.models.ExamParts;
+import com.example.english_exam.models.ExamPart;
 import com.example.english_exam.repositories.ExamPartRepository;
 import org.springframework.stereotype.Service;
 
@@ -15,19 +15,19 @@ public class ExamPartService {
         this.examPartRepository = examPartRepository;
     }
 
-    public List<ExamParts> findAll() {
+    public List<ExamPart> findAll() {
         return examPartRepository.findAll();
     }
 
-    public List<ExamParts> findByExamTypeId(Long examTypeId) {
+    public List<ExamPart> findByExamTypeId(Long examTypeId) {
         return examPartRepository.findByExamTypeId(examTypeId);
     }
 
-    public Optional<ExamParts> findById(Long id) {
+    public Optional<ExamPart> findById(Long id) {
         return examPartRepository.findById(id);
     }
 
-    public ExamParts save(ExamParts examPart) {
+    public ExamPart save(ExamPart examPart) {
         return examPartRepository.save(examPart);
     }
 
