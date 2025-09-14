@@ -26,4 +26,7 @@ public class ExamPart {
 
     @Column(name = "default_num_questions")
     private Integer defaultNumQuestions;
+
+    @Column(nullable = false)
+    private Long skillId; // FK -> exam_types
 }

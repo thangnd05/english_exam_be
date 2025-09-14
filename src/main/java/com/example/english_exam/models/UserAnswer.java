@@ -27,10 +27,4 @@ public class UserAnswer {
     @Column(columnDefinition = "TEXT")
     private String answerText; // cho tự luận
 
-    private Boolean isCorrect;
-
-    private Integer score = 0;
-
-    @Column(nullable = false)
-    private LocalDateTime answeredAt = LocalDateTime.now();
 }

@@ -50,10 +50,26 @@ public class UserTestController {
         return ResponseEntity.ok(userTestService.save(userTest));
     }
 
+    // --- Xóa user test ---
     @DeleteMapping("/{id}")
     public ResponseEntity<?> delete(@PathVariable Long id) {
-        return userTestService.delete(id)
-                ? ResponseEntity.noContent().build()
-                : ResponseEntity.notFound().build();
+        return userTestService.findById(id)
+                .map(existing -> {
+                    userTestService.delete(id);
+                    return ResponseEntity.noContent().build(); // 204 No Content
+                })
+                .orElse(ResponseEntity.notFound().build()); // 404 Not Found
     }
+
+    // --- Submit test ---
+    @PostMapping("/{userTestId}/submit")
+    public ResponseEntity<UserTest> submitTest(@PathVariable Long userTestId) {
+        try {
+            UserTest submittedTest = userTestService.submitTest(userTestId);
+            return ResponseEntity.ok(submittedTest);
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().build(); // đổi từ notFound sang badRequest nếu lỗi submit
+        }
+    }
+
 }

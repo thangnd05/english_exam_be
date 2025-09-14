@@ -52,8 +52,11 @@ public class UserAnswerController {
 
     @DeleteMapping("/{id}")
     public ResponseEntity<?> delete(@PathVariable Long id) {
-        return userAnswerService.delete(id)
-                ? ResponseEntity.noContent().build()
-                : ResponseEntity.notFound().build();
+        return userAnswerService.findById(id)
+                .map(existing -> {
+                    userAnswerService.delete(id);
+                    return ResponseEntity.noContent().build(); // 204 No Content
+                })
+                .orElse(ResponseEntity.notFound().build()); // 404 Not Found
     }
 }
