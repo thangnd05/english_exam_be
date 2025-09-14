@@ -1,4 +1,4 @@
-package com.example.english_exam.dto;
+package com.example.english_exam.dto.request;
 
 import lombok.*;
 

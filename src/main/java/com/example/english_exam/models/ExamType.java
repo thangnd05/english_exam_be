@@ -23,4 +23,8 @@ public class ExamType {
 
     @Column(nullable = false)
     private Integer durationMinutes; // thời gian riêng cho part (nếu muốn)
+
+    @Column(name = "scoring_method", nullable = false, length = 50)
+    private String scoringMethod = "DEFAULT";
+
 }

@@ -1,7 +1,7 @@
 package com.example.english_exam.controllers;
 
-import com.example.english_exam.dto.QuestionRequest;
-import com.example.english_exam.dto.QuestionResponse;
+import com.example.english_exam.dto.request.QuestionRequest;
+import com.example.english_exam.dto.response.QuestionResponse;
 import com.example.english_exam.models.Question;
 import com.example.english_exam.services.QuestionService;
 import org.springframework.http.ResponseEntity;

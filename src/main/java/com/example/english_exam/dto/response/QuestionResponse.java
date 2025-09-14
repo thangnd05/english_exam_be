@@ -1,4 +1,4 @@
-package com.example.english_exam.dto;
+package com.example.english_exam.dto.response;
 
 import com.example.english_exam.models.Question.QuestionType;
 import lombok.*;
@@ -18,4 +18,6 @@ public class QuestionResponse {
     private QuestionType questionType;
     private String explanation;
     private List<AnswerResponse> answers;
+    private Long testPartId;
+
 }

@@ -1,4 +1,4 @@
-package com.example.english_exam.dto;
+package com.example.english_exam.dto.request;
 
 import com.example.english_exam.models.Question;
 import lombok.*;
@@ -16,4 +16,6 @@ public class QuestionRequest {
     private String questionText;
     private Question.QuestionType questionType;
     private List<AnswerRequest> answers;
+    private Long testPartId;
+
 }
