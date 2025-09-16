@@ -10,4 +10,6 @@ import java.util.List;
 public interface TestQuestionRepository extends JpaRepository<TestQuestion, Long> {
     List<TestQuestion> findByTestPartId(Long testPartId);
     List<TestQuestion> findByQuestionId(Long questionId);
+
+    boolean existsByQuestionIdAndTestPartId(Long questionId, Long testPartId);
 }

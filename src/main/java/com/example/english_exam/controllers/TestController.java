@@ -1,5 +1,9 @@
 package com.example.english_exam.controllers;
 
+import com.example.english_exam.dto.request.PartRequest;
+import com.example.english_exam.dto.request.TestRequest;
+import com.example.english_exam.dto.response.QuestionResponse;
+import com.example.english_exam.dto.response.TestResponse;
 import com.example.english_exam.models.Test;
 import com.example.english_exam.services.TestService;
 import org.springframework.http.ResponseEntity;
@@ -60,6 +64,11 @@ public class TestController {
                     return ResponseEntity.noContent().build(); // 204 No Content
                 })
                 .orElseGet(() -> ResponseEntity.notFound().build()); // 404 Not Found
+    }
+
+    @PostMapping("/practice")
+    public TestResponse createPracticeTest(@RequestBody TestRequest request) {
+        return testService.createTest(request);
     }
 
 }

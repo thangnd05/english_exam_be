@@ -1,11 +1,13 @@
 package com.example.english_exam.services;
 
+import com.example.english_exam.dto.response.AnswerResponse;
 import com.example.english_exam.models.Answer;
 import com.example.english_exam.repositories.AnswerRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 public class AnswerService {
@@ -32,5 +34,17 @@ public class AnswerService {
 
     public void deleteById(Long id) {
         answerRepository.deleteById(id);
+    }
+
+    public List<AnswerResponse> getAnswersByQuestionId(Long questionId) {
+        List<Answer> answers = answerRepository.findByQuestionId(questionId);
+        return answers.stream()
+                .map(ans -> new AnswerResponse(
+                        ans.getAnswerId(),
+                        ans.getAnswerText(),
+                        ans.getIsCorrect(),
+                        ans.getAnswerLabel()
+                ))
+                .collect(Collectors.toList());
     }
 }
