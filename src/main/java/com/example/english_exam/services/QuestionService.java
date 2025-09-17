@@ -10,6 +10,7 @@ import com.example.english_exam.models.TestQuestion;
 import com.example.english_exam.repositories.AnswerRepository;
 import com.example.english_exam.repositories.QuestionRepository;
 import com.example.english_exam.repositories.TestQuestionRepository;
+import com.example.english_exam.services.ApiExtend.GeminiService;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
