@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 public class QuestionService {
@@ -48,6 +49,7 @@ public class QuestionService {
     }
 
     public QuestionResponse createQuestionWithAnswers(QuestionRequest request) {
+
         // 1. Tạo question
         Question question = new Question();
         question.setExamPartId(request.getExamPartId());
@@ -56,15 +58,41 @@ public class QuestionService {
         question.setQuestionType(request.getQuestionType());
         question = questionRepository.save(question);
 
-        // 2. Tạo answers
         List<Answer> answerEntities = new ArrayList<>();
-        for (AnswerRequest ar : request.getAnswers()) {
-            Answer ans = new Answer();
-            ans.setQuestionId(question.getQuestionId());
-            ans.setAnswerText(ar.getAnswerText());
-            ans.setIsCorrect(ar.getIsCorrect());
-            ans.setAnswerLabel(ar.getLabel());
-            answerEntities.add(answerRepository.save(ans));
+
+        // 2. Tạo answers dựa trên questionType
+        switch (question.getQuestionType()) {
+            case MCQ:
+                // MCQ: tạo nhiều đáp án từ request
+                for (AnswerRequest ar : request.getAnswers()) {
+                    Answer ans = new Answer();
+                    ans.setQuestionId(question.getQuestionId());
+                    ans.setAnswerText(ar.getAnswerText());
+                    ans.setIsCorrect(ar.getIsCorrect());
+                    ans.setAnswerLabel(ar.getLabel());
+                    answerEntities.add(answerRepository.save(ans));
+                }
+                break;
+
+            case FILL_BLANK:
+                // FILL_BLANK: chỉ 1 đáp án chuẩn
+                if (request.getAnswers() != null && !request.getAnswers().isEmpty()) {
+                    AnswerRequest ar = request.getAnswers().get(0);
+                    Answer ans = new Answer();
+                    ans.setQuestionId(question.getQuestionId());
+                    ans.setAnswerText(ar.getAnswerText());
+                    ans.setIsCorrect(true);
+                    ans.setAnswerLabel(ar.getLabel());
+                    answerEntities.add(answerRepository.save(ans));
+                }
+                break;
+
+            case ESSAY:
+                // ESSAY: không cần tạo answer, user sẽ viết vào answer_text
+                break;
+
+            default:
+                throw new IllegalArgumentException("Unknown question type: " + question.getQuestionType());
         }
 
         // 3. Sinh explanation nếu chưa có
@@ -74,17 +102,12 @@ public class QuestionService {
             question = questionRepository.save(question);
         }
 
-        // 4. Chuyển answers sang DTO response
-        List<AnswerResponse> answerResponses = new ArrayList<>();
-        for (Answer a : answerEntities) {
-            AnswerResponse ar = new AnswerResponse();
-            ar.setAnswerId(a.getAnswerId());
-            ar.setAnswerText(a.getAnswerText());
-            ar.setIsCorrect(a.getIsCorrect());
-            ar.setAnswerLabel(a.getAnswerLabel());
-            answerResponses.add(ar);
-        }
-        // 5. Gán câu hỏi vào test_questions (nếu có test_part_id truyền vào)
+        // 4. Chuyển answers sang DTO
+        List<AnswerResponse> answerResponses = answerEntities.stream()
+                .map(a -> new AnswerResponse(a.getAnswerId(), a.getAnswerText(), a.getIsCorrect(), a.getAnswerLabel()))
+                .collect(Collectors.toList());
+
+        // 5. Gán câu hỏi vào test_part nếu có
         if (request.getTestPartId() != null) {
             TestQuestion tq = new TestQuestion();
             tq.setTestPartId(request.getTestPartId());
@@ -92,7 +115,7 @@ public class QuestionService {
             testQuestionRepository.save(tq);
         }
 
-        // 6. Trả về QuestionResponse
+        // 6. Trả về response
         return new QuestionResponse(
                 question.getQuestionId(),
                 question.getExamPartId(),
@@ -101,11 +124,8 @@ public class QuestionService {
                 question.getQuestionType(),
                 question.getExplanation(),
                 answerResponses,
-                request.getTestPartId() // gán thêm testPartId vào response
+                request.getTestPartId()
         );
-
-
-
     }
 
     public void deleteById(Long id) {
