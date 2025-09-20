@@ -9,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/practice-questions")
@@ -42,11 +43,29 @@ public class PracticeController {
     }
 
     // 5. Generate random câu hỏi theo album
+//    @GetMapping("/gentest/{albumId}")
+//    public ResponseEntity<List<PracticeQuestionResponse>> generateQuestionsForAlbum(
+//            @PathVariable Long albumId) {
+//        List<PracticeQuestionResponse> questions = practiceService.generatePracticeQuestionsForAlbum(albumId);
+//        return ResponseEntity.ok(questions);
+//    }
+
+
+
     @GetMapping("/generate/{albumId}")
-    public ResponseEntity<List<PracticeQuestionResponse>> generateQuestionsForAlbum(
-            @PathVariable Long albumId) {
-        List<PracticeQuestionResponse> questions = practiceService.generatePracticeQuestionsForAlbum(albumId);
-        return ResponseEntity.ok(questions);
+    public ResponseEntity<PracticeQuestionResponse> generateRandomQuestion(
+            @PathVariable Long albumId,
+            @RequestParam Long userId) { // cần userId để lọc theo UserVocabulary
+
+        Optional<PracticeQuestionResponse> questionOpt = practiceService.generateOneRandomQuestion(userId, albumId);
+
+        if (questionOpt.isPresent()) {
+            return ResponseEntity.ok(questionOpt.get());
+        } else {
+            // hết từ chưa mastered
+            return ResponseEntity.noContent().build();
+        }
     }
+
 }
 

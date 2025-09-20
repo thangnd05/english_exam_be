@@ -150,88 +150,168 @@ public class PracticeService {
 
     // ============================= RANDOM THEO ALBUM =============================
 
-    public List<PracticeQuestionResponse> generatePracticeQuestionsForAlbum(Long albumId) {
+//    public List<PracticeQuestionResponse> generatePracticeQuestionsForAlbum(Long albumId) {
+//        List<Vocabulary> vocabularies = vocabularyRepository.findByAlbumId(albumId);
+//        int total = vocabularies.size();
+//        if (total == 0) return Collections.emptyList();
+//
+//        // Chia đều cho 3 loại
+//        int perType = total / 2;
+//        int remainder = total % 2;
+//
+//        List<PracticeQuestion.QuestionType> types = new ArrayList<>();
+//        for (int i = 0; i < perType; i++) types.add(PracticeQuestion.QuestionType.MULTICHOICE);
+//        for (int i = 0; i < perType; i++) types.add(PracticeQuestion.QuestionType.LISTENING_EN);
+//
+//        Random rand = new Random();
+//        for (int i = 0; i < remainder; i++) {
+//            int r = rand.nextInt(3);
+//            if (r == 0) types.add(PracticeQuestion.QuestionType.MULTICHOICE);
+//            else if (r == 1) types.add(PracticeQuestion.QuestionType.LISTENING_EN);
+//        }
+//
+//        Collections.shuffle(types);
+//
+//        List<PracticeQuestionResponse> responses = new ArrayList<>();
+//        for (int i = 0; i < vocabularies.size(); i++) {
+//            Vocabulary vocab = vocabularies.get(i);
+//            PracticeQuestion.QuestionType type = types.get(i);
+//
+//            PracticeQuestion question = new PracticeQuestion();
+//            question.setVocabId(vocab.getVocabId());
+//            question.setType(type);
+//            question.setQuestionText(type == PracticeQuestion.QuestionType.MULTICHOICE
+//                    ? "Chọn nghĩa đúng của từ: " + vocab.getWord()
+//                    : "Nghe/viết lại từ: " + vocab.getMeaning());
+//
+//            PracticeQuestion saved = questionRepository.save(question);
+//
+//            List<PracticeOptionResponse> optionResponses = null;
+//            if (type == PracticeQuestion.QuestionType.MULTICHOICE) {
+//                List<Vocabulary> distractors = vocabularies.stream()
+//                        .filter(v -> !v.getVocabId().equals(vocab.getVocabId()))
+//                        .limit(3)
+//                        .collect(Collectors.toList());
+//
+//                List<PracticeOption> options = new ArrayList<>();
+//                options.add(new PracticeOption(null, saved.getId(), vocab.getMeaning(), true));
+//                for (Vocabulary d : distractors) {
+//                    options.add(new PracticeOption(null, saved.getId(), d.getMeaning(), false));
+//                }
+//
+//                List<PracticeOption> savedOptions = optionRepository.saveAll(options);
+//
+//                optionResponses = savedOptions.stream()
+//                        .map(o -> new PracticeOptionResponse(o.getId(), o.getOptionText()))
+//                        .collect(Collectors.toList());
+//            }
+//
+//            PracticeAnswerResponse answerResponse = null;
+//            if (type == PracticeQuestion.QuestionType.LISTENING_EN) {
+//                PracticeAnswer ans = new PracticeAnswer();
+//                ans.setPracticeQuestionId(saved.getId());
+//                ans.setCorrectEnglish(vocab.getWord());
+//                ans.setCorrectVietnamese(vocab.getMeaning());
+//
+//                PracticeAnswer savedAns = answerRepository.save(ans);
+//
+//                answerResponse = new PracticeAnswerResponse(
+//                        savedAns.getCorrectEnglish(),
+//                        savedAns.getCorrectVietnamese()
+//                );
+//            }
+//
+//            responses.add(new PracticeQuestionResponse(
+//                    saved.getId(),
+//                    saved.getVocabId(),
+//                    saved.getType(),
+//                    saved.getQuestionText(),
+//                    vocab.getVoiceUrl(),
+//                    optionResponses,
+//                    answerResponse
+//            ));
+//        }
+//
+//        return responses;
+//    }
+
+    public Optional<PracticeQuestionResponse> generateOneRandomQuestion(Long userId, Long albumId) {
+        // 1. Lấy danh sách vocabId đã mastered của user trong album
+        List<Long> masteredIds = userVocabularyRepository.findMasteredVocabIdsByUserIdAndAlbumId(userId, albumId);
+
+        // 2. Lấy tất cả từ trong album
         List<Vocabulary> vocabularies = vocabularyRepository.findByAlbumId(albumId);
-        int total = vocabularies.size();
-        if (total == 0) return Collections.emptyList();
 
-        // Chia đều cho 3 loại
-        int perType = total / 2;
-        int remainder = total % 2;
+        // 3. Lọc ra những từ chưa mastered
+        List<Vocabulary> availableVocabs = vocabularies.stream()
+                .filter(v -> !masteredIds.contains(v.getVocabId()))
+                .collect(Collectors.toList());
 
-        List<PracticeQuestion.QuestionType> types = new ArrayList<>();
-        for (int i = 0; i < perType; i++) types.add(PracticeQuestion.QuestionType.MULTICHOICE);
-        for (int i = 0; i < perType; i++) types.add(PracticeQuestion.QuestionType.LISTENING_EN);
+        if (availableVocabs.isEmpty()) return Optional.empty(); // hết từ chưa học
 
+        // 4. Chọn random 1 từ
         Random rand = new Random();
-        for (int i = 0; i < remainder; i++) {
-            int r = rand.nextInt(3);
-            if (r == 0) types.add(PracticeQuestion.QuestionType.MULTICHOICE);
-            else if (r == 1) types.add(PracticeQuestion.QuestionType.LISTENING_EN);
-        }
+        Vocabulary vocab = availableVocabs.get(rand.nextInt(availableVocabs.size()));
 
-        Collections.shuffle(types);
+        // 5. Chọn random type
+        PracticeQuestion.QuestionType type = rand.nextBoolean()
+                ? PracticeQuestion.QuestionType.MULTICHOICE
+                : PracticeQuestion.QuestionType.LISTENING_EN;
 
-        List<PracticeQuestionResponse> responses = new ArrayList<>();
-        for (int i = 0; i < vocabularies.size(); i++) {
-            Vocabulary vocab = vocabularies.get(i);
-            PracticeQuestion.QuestionType type = types.get(i);
+        // 6. Tạo PracticeQuestion
+        PracticeQuestion question = new PracticeQuestion();
+        question.setVocabId(vocab.getVocabId());
+        question.setType(type);
+        question.setQuestionText(type == PracticeQuestion.QuestionType.MULTICHOICE
+                ? "Chọn nghĩa đúng của từ: " + vocab.getWord()
+                : "Nghe/viết lại từ: " + vocab.getMeaning());
 
-            PracticeQuestion question = new PracticeQuestion();
-            question.setVocabId(vocab.getVocabId());
-            question.setType(type);
-            question.setQuestionText(type == PracticeQuestion.QuestionType.MULTICHOICE
-                    ? "Chọn nghĩa đúng của từ: " + vocab.getWord()
-                    : "Nghe/viết lại từ: " + vocab.getMeaning());
+        PracticeQuestion saved = questionRepository.save(question);
 
-            PracticeQuestion saved = questionRepository.save(question);
+        // 7. Tạo options/answer
+        List<PracticeOptionResponse> optionResponses = null;
+        PracticeAnswerResponse answerResponse = null;
 
-            List<PracticeOptionResponse> optionResponses = null;
-            if (type == PracticeQuestion.QuestionType.MULTICHOICE) {
-                List<Vocabulary> distractors = vocabularies.stream()
-                        .filter(v -> !v.getVocabId().equals(vocab.getVocabId()))
-                        .limit(3)
-                        .collect(Collectors.toList());
+        if (type == PracticeQuestion.QuestionType.MULTICHOICE) {
+            List<Vocabulary> distractors = vocabularies.stream()
+                    .filter(v -> !v.getVocabId().equals(vocab.getVocabId()))
+                    .limit(3)
+                    .collect(Collectors.toList());
 
-                List<PracticeOption> options = new ArrayList<>();
-                options.add(new PracticeOption(null, saved.getId(), vocab.getMeaning(), true));
-                for (Vocabulary d : distractors) {
-                    options.add(new PracticeOption(null, saved.getId(), d.getMeaning(), false));
-                }
-
-                List<PracticeOption> savedOptions = optionRepository.saveAll(options);
-
-                optionResponses = savedOptions.stream()
-                        .map(o -> new PracticeOptionResponse(o.getId(), o.getOptionText()))
-                        .collect(Collectors.toList());
+            List<PracticeOption> options = new ArrayList<>();
+            options.add(new PracticeOption(null, saved.getId(), vocab.getMeaning(), true));
+            for (Vocabulary d : distractors) {
+                options.add(new PracticeOption(null, saved.getId(), d.getMeaning(), false));
             }
 
-            PracticeAnswerResponse answerResponse = null;
-            if (type == PracticeQuestion.QuestionType.LISTENING_EN) {
-                PracticeAnswer ans = new PracticeAnswer();
-                ans.setPracticeQuestionId(saved.getId());
-                ans.setCorrectEnglish(vocab.getWord());
-                ans.setCorrectVietnamese(vocab.getMeaning());
+            List<PracticeOption> savedOptions = practiceOptionRepository.saveAll(options);
+            optionResponses = savedOptions.stream()
+                    .map(o -> new PracticeOptionResponse(o.getId(), o.getOptionText()))
+                    .collect(Collectors.toList());
+        } else {
+            PracticeAnswer ans = new PracticeAnswer();
+            ans.setPracticeQuestionId(saved.getId());
+            ans.setCorrectEnglish(vocab.getWord());
+            ans.setCorrectVietnamese(vocab.getMeaning());
+            PracticeAnswer savedAns = answerRepository.save(ans);
 
-                PracticeAnswer savedAns = answerRepository.save(ans);
-
-                answerResponse = new PracticeAnswerResponse(
-                        savedAns.getCorrectEnglish(),
-                        savedAns.getCorrectVietnamese()
-                );
-            }
-
-            responses.add(new PracticeQuestionResponse(
-                    saved.getId(),
-                    saved.getVocabId(),
-                    saved.getType(),
-                    saved.getQuestionText(),
-                    vocab.getVoiceUrl(),
-                    optionResponses,
-                    answerResponse
-            ));
+            answerResponse = new PracticeAnswerResponse(
+                    savedAns.getCorrectEnglish(),
+                    savedAns.getCorrectVietnamese()
+            );
         }
 
-        return responses;
+        return Optional.of(new PracticeQuestionResponse(
+                saved.getId(),
+                saved.getVocabId(),
+                saved.getType(),
+                saved.getQuestionText(),
+                vocab.getVoiceUrl(),
+                optionResponses,
+                answerResponse
+        ));
     }
+
+
+
 }
