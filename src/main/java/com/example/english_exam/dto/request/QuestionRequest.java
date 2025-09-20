@@ -7,6 +7,8 @@ import java.util.List;
 
 
 
+@Setter
+@Getter
 public class QuestionRequest {
     private Long examPartId;
     private Long passageId; // nullable
@@ -24,51 +26,4 @@ public class QuestionRequest {
         this.testPartId = testPartId;
     }
 
-    public Long getExamPartId() {
-        return examPartId;
-    }
-
-    public void setExamPartId(Long examPartId) {
-        this.examPartId = examPartId;
-    }
-
-    public Long getPassageId() {
-        return passageId;
-    }
-
-    public void setPassageId(Long passageId) {
-        this.passageId = passageId;
-    }
-
-    public String getQuestionText() {
-        return questionText;
-    }
-
-    public void setQuestionText(String questionText) {
-        this.questionText = questionText;
-    }
-
-    public Question.QuestionType getQuestionType() {
-        return questionType;
-    }
-
-    public void setQuestionType(Question.QuestionType questionType) {
-        this.questionType = questionType;
-    }
-
-    public List<AnswerRequest> getAnswers() {
-        return answers;
-    }
-
-    public void setAnswers(List<AnswerRequest> answers) {
-        this.answers = answers;
-    }
-
-    public Long getTestPartId() {
-        return testPartId;
-    }
-
-    public void setTestPartId(Long testPartId) {
-        this.testPartId = testPartId;
-    }
 }

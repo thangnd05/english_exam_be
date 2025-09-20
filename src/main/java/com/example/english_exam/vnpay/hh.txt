@@ -8,10 +8,7 @@ import com.example.english_exam.models.Answer;
 import com.example.english_exam.models.Passage;
 import com.example.english_exam.models.Question;
 import com.example.english_exam.models.TestQuestion;
-import com.example.english_exam.repositories.AnswerRepository;
-import com.example.english_exam.repositories.PassageRepository;
-import com.example.english_exam.repositories.QuestionRepository;
-import com.example.english_exam.repositories.TestQuestionRepository;
+import com.example.english_exam.repositories.*;
 import com.example.english_exam.services.ApiExtend.GeminiService;
 import org.springframework.stereotype.Service;
 
@@ -23,17 +20,24 @@ import java.util.stream.Collectors;
 @Service
 public class QuestionService {
     private final QuestionRepository questionRepository;
+    private final PassageRepository passageRepository;
     private final AnswerRepository answerRepository;
+    private final SkillRepository skillRepository;
     private final GeminiService geminiService;
     private final TestQuestionRepository testQuestionRepository;
-    private final PassageRepository  passageRepository;
 
-    public QuestionService(QuestionRepository questionRepository, AnswerRepository answerRepository, GeminiService geminiService, TestQuestionRepository testQuestionRepository, PassageRepository passageRepository) {
+    public QuestionService(QuestionRepository questionRepository,
+                           PassageRepository passageRepository,
+                           AnswerRepository answerRepository,
+                           SkillRepository skillRepository,
+                           GeminiService geminiService,
+                           TestQuestionRepository testQuestionRepository) {
         this.questionRepository = questionRepository;
+        this.passageRepository = passageRepository;
         this.answerRepository = answerRepository;
+        this.skillRepository = skillRepository;
         this.geminiService = geminiService;
         this.testQuestionRepository = testQuestionRepository;
-        this.passageRepository = passageRepository;
     }
 
     public List<Question> findAll() {
@@ -54,33 +58,46 @@ public class QuestionService {
 
     public QuestionResponse createQuestionWithAnswers(QuestionRequest request) {
 
-        // 1. Tạo question
+        Passage passage = null;
+        Long passageId = request.getPassageId();
+
+        // 1. Nếu có passageContent hoặc mediaUrl thì tạo passage mới
+        if ((request.getPassageContent() != null && !request.getPassageContent().isEmpty())
+                || (request.getMediaUrl() != null && !request.getMediaUrl().isEmpty())) {
+
+            passage = new Passage();
+            passage.setContent(request.getPassageContent());
+            passage.setMediaUrl(request.getMediaUrl());
+            passage.setPassageType(request.getPassageType());
+            passage = passageRepository.save(passage);
+
+            passageId = passage.getPassageId();
+        }
+
+        // 2. Tạo question
         Question question = new Question();
         question.setExamPartId(request.getExamPartId());
-        question.setPassageId(request.getPassageId());
+        question.setPassageId(passageId); // null nếu không tạo passage và không có passageId
         question.setQuestionText(request.getQuestionText());
         question.setQuestionType(request.getQuestionType());
         question = questionRepository.save(question);
 
+        // 3. Tạo answers
         List<Answer> answerEntities = new ArrayList<>();
+        if (request.getAnswers() != null && !request.getAnswers().isEmpty()) {
+            switch (question.getQuestionType()) {
+                case MCQ:
+                    for (AnswerRequest ar : request.getAnswers()) {
+                        Answer ans = new Answer();
+                        ans.setQuestionId(question.getQuestionId());
+                        ans.setAnswerText(ar.getAnswerText());
+                        ans.setIsCorrect(ar.getIsCorrect());
+                        ans.setAnswerLabel(ar.getLabel());
+                        answerEntities.add(answerRepository.save(ans));
+                    }
+                    break;
 
-        // 2. Tạo answers dựa trên questionType
-        switch (question.getQuestionType()) {
-            case MCQ:
-                // MCQ: tạo nhiều đáp án từ request
-                for (AnswerRequest ar : request.getAnswers()) {
-                    Answer ans = new Answer();
-                    ans.setQuestionId(question.getQuestionId());
-                    ans.setAnswerText(ar.getAnswerText());
-                    ans.setIsCorrect(ar.getIsCorrect());
-                    ans.setAnswerLabel(ar.getLabel());
-                    answerEntities.add(answerRepository.save(ans));
-                }
-                break;
-
-            case FILL_BLANK:
-                // FILL_BLANK: chỉ 1 đáp án chuẩn
-                if (request.getAnswers() != null && !request.getAnswers().isEmpty()) {
+                case FILL_BLANK:
                     AnswerRequest ar = request.getAnswers().get(0);
                     Answer ans = new Answer();
                     ans.setQuestionId(question.getQuestionId());
@@ -88,40 +105,30 @@ public class QuestionService {
                     ans.setIsCorrect(true);
                     ans.setAnswerLabel(ar.getLabel());
                     answerEntities.add(answerRepository.save(ans));
-                }
-                break;
+                    break;
 
-            case ESSAY:
-                // ESSAY: không cần tạo answer, user sẽ viết vào answer_text
-                break;
+                case ESSAY:
+                    // ESSAY: user tự viết, không cần tạo answer
+                    break;
 
-            default:
-                throw new IllegalArgumentException("Unknown question type: " + question.getQuestionType());
+                default:
+                    throw new IllegalArgumentException("Unknown question type: " + question.getQuestionType());
+            }
         }
 
-        // SỬA LẠI NHƯ SAU:
-
-// 3. Truy vấn lại passage để lấy context và sinh explanation
-// Lấy passage từ DB nếu câu hỏi này có passageId
-        Passage passageContext = null;
-        if (question.getPassageId() != null) {
-            passageContext = passageRepository.findById(question.getPassageId())
-                    .orElse(null); // orElse(null) để tránh lỗi nếu ID không tồn tại
-        }
-
+        // 4. Sinh explanation nếu chưa có, truyền cả passage nếu có
         if (question.getExplanation() == null || question.getExplanation().isEmpty()) {
-            // Truyền cả passageContext vào cho AI
-            String explanation = geminiService.explainQuestion(question, answerEntities, passageContext);
+            String explanation = geminiService.explainQuestion(question, answerEntities, passage);
             question.setExplanation(explanation);
             question = questionRepository.save(question);
         }
 
-        // 4. Chuyển answers sang DTO
+        // 5. Chuyển answers sang DTO
         List<AnswerResponse> answerResponses = answerEntities.stream()
                 .map(a -> new AnswerResponse(a.getAnswerId(), a.getAnswerText(), a.getIsCorrect(), a.getAnswerLabel()))
                 .collect(Collectors.toList());
 
-        // 5. Gán câu hỏi vào test_part nếu có
+        // 6. Gán câu hỏi vào test_part nếu có
         if (request.getTestPartId() != null) {
             TestQuestion tq = new TestQuestion();
             tq.setTestPartId(request.getTestPartId());
@@ -129,7 +136,7 @@ public class QuestionService {
             testQuestionRepository.save(tq);
         }
 
-        // 6. Trả về response
+        // 7. Trả về response
         return new QuestionResponse(
                 question.getQuestionId(),
                 question.getExamPartId(),
@@ -141,6 +148,8 @@ public class QuestionService {
                 request.getTestPartId()
         );
     }
+
+
 
     public void deleteById(Long id) {
         questionRepository.deleteById(id);

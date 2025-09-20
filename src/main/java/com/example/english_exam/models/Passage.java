@@ -20,4 +20,14 @@ public class Passage {
 
     @Column(length = 255)
     private String mediaUrl; // có thể null
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private PassageType passageType; // thêm trường này
+
+    public enum PassageType {
+        READING,
+        LISTENING
+    }
 }
+
