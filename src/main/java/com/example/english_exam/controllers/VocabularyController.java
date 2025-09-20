@@ -3,7 +3,7 @@ package com.example.english_exam.controllers;
 import com.example.english_exam.dto.request.VocabularyRequest;
 import com.example.english_exam.dto.response.VocabularyResponse;
 import com.example.english_exam.models.Vocabulary;
-import com.example.english_exam.services.VocabularyService;
+import com.example.english_exam.services.LearningVoca.VocabularyService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 

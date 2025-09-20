@@ -11,5 +11,8 @@ public class PracticeAnswerResponse {
     private Long id;
     private String correctEnglish;
     private String correctVietnamese;
+
+    public PracticeAnswerResponse(String correctEnglish, String correctVietnamese) {
+    }
 }
 

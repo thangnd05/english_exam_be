@@ -1,4 +1,4 @@
-package com.example.english_exam.services;
+package com.example.english_exam.services.LearningVoca;
 
 import com.example.english_exam.models.UserVocabulary;
 import com.example.english_exam.repositories.UserVocabularyRepository;

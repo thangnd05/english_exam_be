@@ -15,21 +15,18 @@ public class PracticeQuestion {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(nullable = false)
     private Long vocabId; // FK -> vocabulary.vocab_id
 
     @Enumerated(EnumType.STRING)
     private QuestionType type; // MULTICHOICE, LISTENING_EN, LISTENING_VI, WRITING_EN, WRITING_VI
 
     private String questionText;
-    private String audioUrl;
 
     private LocalDateTime createdAt = LocalDateTime.now();
 
     public enum QuestionType {
         MULTICHOICE,
-        LISTENING_EN,
-        LISTENING_VI,
-        WRITING_EN,
-        WRITING_VI
+        LISTENING_EN
     }
 }

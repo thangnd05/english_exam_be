@@ -3,7 +3,7 @@ package com.example.english_exam.controllers;
 import com.example.english_exam.dto.request.QuestionRequest;
 import com.example.english_exam.dto.response.QuestionResponse;
 import com.example.english_exam.models.Question;
-import com.example.english_exam.services.QuestionService;
+import com.example.english_exam.services.ExamAndTest.QuestionService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 

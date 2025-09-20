@@ -1,7 +1,7 @@
 package com.example.english_exam.controllers;
 
 import com.example.english_exam.models.VocabularyAlbum;
-import com.example.english_exam.services.VocabularyAlbumService;
+import com.example.english_exam.services.LearningVoca.VocabularyAlbumService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 

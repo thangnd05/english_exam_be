@@ -2,7 +2,7 @@
 package com.example.english_exam.controllers;
 
 import com.example.english_exam.models.Skill;
-import com.example.english_exam.services.SkillService;
+import com.example.english_exam.services.ExamAndTest.SkillService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 

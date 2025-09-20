@@ -1,7 +1,7 @@
 package com.example.english_exam.controllers;
 
 import com.example.english_exam.models.Passage;
-import com.example.english_exam.services.PassageService;
+import com.example.english_exam.services.ExamAndTest.PassageService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 

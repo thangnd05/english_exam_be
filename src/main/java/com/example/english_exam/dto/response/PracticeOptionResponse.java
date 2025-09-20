@@ -11,5 +11,8 @@ public class PracticeOptionResponse {
     private Long id;
     private String optionText;
     private boolean isCorrect;
+
+    public PracticeOptionResponse(Long id, String optionText) {
+    }
 }
 

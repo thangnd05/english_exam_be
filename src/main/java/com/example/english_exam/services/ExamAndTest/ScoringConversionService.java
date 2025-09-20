@@ -1,5 +1,5 @@
 // ScoringConversionService.java
-package com.example.english_exam.services;
+package com.example.english_exam.services.ExamAndTest;
 
 import com.example.english_exam.models.ScoringConversion;
 import com.example.english_exam.repositories.ScoringConversionRepository;

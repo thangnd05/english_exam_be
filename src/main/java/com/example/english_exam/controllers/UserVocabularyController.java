@@ -1,7 +1,7 @@
 package com.example.english_exam.controllers;
 
 import com.example.english_exam.models.UserVocabulary;
-import com.example.english_exam.services.UserVocabularyService;
+import com.example.english_exam.services.LearningVoca.UserVocabularyService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 

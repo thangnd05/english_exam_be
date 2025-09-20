@@ -2,7 +2,7 @@
 package com.example.english_exam.controllers;
 
 import com.example.english_exam.models.ScoringConversion;
-import com.example.english_exam.services.ScoringConversionService;
+import com.example.english_exam.services.ExamAndTest.ScoringConversionService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 

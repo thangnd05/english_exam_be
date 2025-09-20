@@ -25,6 +25,8 @@ public class UserVocabulary {
     private Status status = Status.learning;
 
     private LocalDateTime lastReviewed = LocalDateTime.now();
+    private int correctCount = 0; // số lần trả lời đúng liên tiếp
+
 
     public enum Status {
         learning,

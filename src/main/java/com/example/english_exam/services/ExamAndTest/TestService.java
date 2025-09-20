@@ -1,4 +1,4 @@
-package com.example.english_exam.services;
+package com.example.english_exam.services.ExamAndTest;
 
 import com.example.english_exam.dto.request.PartRequest;
 import com.example.english_exam.dto.request.TestRequest;
@@ -14,7 +14,6 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 @Service
 public class TestService {

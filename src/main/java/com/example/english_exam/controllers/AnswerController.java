@@ -1,10 +1,7 @@
 package com.example.english_exam.controllers;
 
-import com.example.english_exam.dto.request.PartRequest;
-import com.example.english_exam.dto.response.QuestionResponse;
 import com.example.english_exam.models.Answer;
-import com.example.english_exam.models.Test;
-import com.example.english_exam.services.AnswerService;
+import com.example.english_exam.services.ExamAndTest.AnswerService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 

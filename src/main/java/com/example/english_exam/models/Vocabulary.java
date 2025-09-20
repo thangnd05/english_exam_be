@@ -32,4 +32,6 @@ public class Vocabulary {
 
 
     private LocalDateTime createdAt = LocalDateTime.now();
+
+
 }

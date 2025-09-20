@@ -1,7 +1,7 @@
 package com.example.english_exam.controllers;
 
 import com.example.english_exam.models.TestPart;
-import com.example.english_exam.services.TestPartService;
+import com.example.english_exam.services.ExamAndTest.TestPartService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
