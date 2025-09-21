@@ -1,39 +1,50 @@
-//package com.example.test.Config;
-//
-//import org.springframework.beans.factory.annotation.Autowired;
-//import org.springframework.security.core.userdetails.User;
-//import org.springframework.security.core.userdetails.UserDetails;
-//import org.springframework.security.core.userdetails.UserDetailsService;
-//import org.springframework.security.core.userdetails.UsernameNotFoundException;
-//import org.springframework.security.core.authority.SimpleGrantedAuthority;
-//import org.springframework.stereotype.Service;
-//
-//import java.util.ArrayList;
-//import java.util.List;
-//
-//
-////Giúp Spring Security lấy thông tin tài khoản từ database.
-//@Service
-//public class CustomUserDetailsService implements UserDetailsService {
-//
-//    private final UserRespo userRespo;
-//
-//    @Autowired
-//    public CustomUserDetailsService(UserRespo userRespo) {
-//        this.userRespo = userRespo;
-//    }
-//
-//    @Override
-//    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-//        // Tìm người dùng trong cơ sở dữ liệu
-//        Users user = userRespo.findByUsername(username)
-//                .orElseThrow(() -> new UsernameNotFoundException("User not found"));
-//
-//        // Lấy danh sách vai trò của người dùng (giả sử bạn có cách lấy vai trò)
-//        List<SimpleGrantedAuthority> authorities = new ArrayList<>();
-//        authorities.add(new SimpleGrantedAuthority("ROLE_" + user.getRole())); // Thêm tiền tố ROLE_ vào vai trò
-//
-//        // Trả về đối tượng UserDetails với username, password và danh sách vai trò
-//        return new User(user.getUsername(), user.getPassword(), authorities);
-//    }
-//}
+// src/main/java/com/example/english_exam/config/CustomUserDetailsService.java
+package com.example.english_exam.config;
+
+import com.example.english_exam.models.Role;
+import com.example.english_exam.models.User;
+import com.example.english_exam.repositories.RoleRepository;
+import com.example.english_exam.repositories.UserRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.stereotype.Service;
+
+import java.util.Collections;
+
+@Service
+public class CustomUserDetailsService implements UserDetailsService {
+
+    private final UserRepository userRepository;
+    private final RoleRepository roleRepository; // Phải inject thêm RoleRepository
+
+    @Autowired
+    public CustomUserDetailsService(UserRepository userRepository, RoleRepository roleRepository) {
+        this.userRepository = userRepository;
+        this.roleRepository = roleRepository;
+    }
+
+    @Override
+    public UserDetails loadUserByUsername(String input) throws UsernameNotFoundException {
+        // Query 1: Tìm User
+        User user = userRepository.findByUserNameOrEmail(input, input)
+                .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy người dùng với: " + input));
+
+        // Lấy roleId từ user
+        Long roleId = user.getRoleId();
+
+        // Query 2: Dùng roleId để tìm Role. Thêm 1 lần truy vấn database!
+        Role role = roleRepository.findById(roleId)
+                .orElseThrow(() -> new RuntimeException("Lỗi: Không tìm thấy Role với ID: " + roleId));
+
+        String roleName = "ROLE_" + role.getRoleName().toUpperCase();
+
+        return new org.springframework.security.core.userdetails.User(
+                user.getEmail(),
+                user.getPassword(),
+                Collections.singletonList(new SimpleGrantedAuthority(roleName))
+        );
+    }
+}
