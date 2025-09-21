@@ -40,6 +40,8 @@ public class AuthService {
         this.roleRepository = roleRepository;
     }
 
+    // src/main/java/com/example/english_exam/security/AuthService.java
+
     public Map<String, Object> login(String identifier, String password, HttpServletResponse response) {
         try {
             authenticationManager.authenticate(
@@ -62,45 +64,93 @@ public class AuthService {
 
         setAccessTokenCookie(accessToken, response);
 
-        return Map.of("message", "Đăng nhập thành công", "refreshToken", refreshToken);
+        // --- SỬA Ở ĐÂY ---
+        // Tạo một Map chứa thông tin user để trả về
+        Map<String, Object> userResponse = Map.of(
+                "id", user.getUserId(),
+                "username", user.getUserName(),
+                "email", user.getEmail(),
+                "roleId", user.getRoleId() // Có thể thêm role name nếu cần
+        );
+
+        // Trả về cả message, refreshToken và object user
+        return Map.of(
+                "message", "Đăng nhập thành công",
+                "refreshToken", refreshToken,
+                "user", userResponse // Thêm object user vào response
+        );
     }
 
-    public AuthResponse refresh(String refreshToken, HttpServletResponse response) {
+    // hiển thị token khi refresh để test
+//    public AuthResponse refresh(String refreshToken, HttpServletResponse response) {
+//        String username = jwtService.extractUsername(refreshToken);
+//        if (username == null || !jwtService.isRefreshToken(refreshToken)) {
+//            throw new RuntimeException("Refresh token không hợp lệ");
+//        }
+//
+//        User user = userRepository.findByUserNameOrEmail(username, username)
+//                .orElseThrow(() -> new RuntimeException("User not found"));
+//
+//        UserDetails userDetails = new org.springframework.security.core.userdetails.User(
+//                user.getEmail(), user.getPassword(), new java.util.ArrayList<>()
+//        );
+//
+//        if (!jwtService.isTokenValid(refreshToken, userDetails)) {
+//            throw new RuntimeException("Refresh token hết hạn hoặc không hợp lệ");
+//        }
+//
+//        // Sinh access token mới
+//        Map<String, Object> claims = new HashMap<>();
+//        claims.put("userId", user.getUserId());
+//        claims.put("roleId", user.getRoleId());
+//
+//        String newAccessToken = jwtService.generateToken(userDetails, claims);
+//
+//        // Set cookie accessToken mới
+//        String cookieValue = URLEncoder.encode(newAccessToken, StandardCharsets.UTF_8);
+//        int cookieMax = (int) ((jwtService.extractClaim(newAccessToken, c -> c.getExpiration()).getTime()
+//                - System.currentTimeMillis()) / 1000);
+//        if (cookieMax <= 0) cookieMax = 3600;
+//
+//        String setCookie = "accessToken=" + cookieValue +
+//                "; HttpOnly; Path=/; Max-Age=" + cookieMax + "; SameSite=Strict; Secure";
+//        response.addHeader("Set-Cookie", setCookie);
+//
+//        // Trả về DTO cho client
+//        return new AuthResponse(newAccessToken, refreshToken, "Cấp access token mới thành công");
+//    }
+
+    public Map<String, Object> refresh(String refreshToken, HttpServletResponse response) {
         String username = jwtService.extractUsername(refreshToken);
         if (username == null || !jwtService.isRefreshToken(refreshToken)) {
             throw new RuntimeException("Refresh token không hợp lệ");
         }
 
-        User user = userRepository.findByUserNameOrEmail(username, username)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-
-        UserDetails userDetails = new org.springframework.security.core.userdetails.User(
-                user.getEmail(), user.getPassword(), new java.util.ArrayList<>()
-        );
-
+        UserDetails userDetails = customUserDetailsService.loadUserByUsername(username);
         if (!jwtService.isTokenValid(refreshToken, userDetails)) {
             throw new RuntimeException("Refresh token hết hạn hoặc không hợp lệ");
         }
 
-        // Sinh access token mới
+        User user = userRepository.findByUserNameOrEmail(username, username)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
         Map<String, Object> claims = new HashMap<>();
         claims.put("userId", user.getUserId());
         claims.put("roleId", user.getRoleId());
 
         String newAccessToken = jwtService.generateToken(userDetails, claims);
 
-        // Set cookie accessToken mới
+        // set accessToken vào cookie HttpOnly
         String cookieValue = URLEncoder.encode(newAccessToken, StandardCharsets.UTF_8);
-        int cookieMax = (int) ((jwtService.extractClaim(newAccessToken, c -> c.getExpiration()).getTime()
-                - System.currentTimeMillis()) / 1000);
+        int cookieMax = (int) ((jwtService.extractClaim(newAccessToken, Claims::getExpiration).getTime() - System.currentTimeMillis()) / 1000);
         if (cookieMax <= 0) cookieMax = 3600;
 
         String setCookie = "accessToken=" + cookieValue +
                 "; HttpOnly; Path=/; Max-Age=" + cookieMax + "; SameSite=Strict; Secure";
         response.addHeader("Set-Cookie", setCookie);
 
-        // Trả về DTO cho client
-        return new AuthResponse(newAccessToken, refreshToken, "Cấp access token mới thành công");
+        // Chỉ trả về message
+        return Map.of("message", "Cấp access token mới thành công");
     }
 
     public void logout(HttpServletResponse response) {
