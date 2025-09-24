@@ -12,5 +12,7 @@ public class TestRequest {
     private String description;
     private Long examTypeId;
     private Long studentId; // createdBy
+    private Integer durationMinutes; // thêm field này, có thể null nếu dùng default
     private List<PartRequest> parts;
+
 }

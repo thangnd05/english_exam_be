@@ -16,5 +16,10 @@ public class TestResponse {
     private Long examTypeId;
     private Long createdBy;
     private LocalDateTime createdAt;
+    private String bannerUrl; // thêm field này
+    private Integer durationMinutes; // thêm field này
+
     private List<TestPartResponse> parts;
+
 }
+

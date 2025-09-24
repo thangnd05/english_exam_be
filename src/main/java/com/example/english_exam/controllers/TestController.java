@@ -3,10 +3,16 @@ package com.example.english_exam.controllers;
 import com.example.english_exam.dto.request.TestRequest;
 import com.example.english_exam.dto.response.TestResponse;
 import com.example.english_exam.models.Test;
+import com.example.english_exam.models.User;
 import com.example.english_exam.services.ExamAndTest.TestService;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.catalina.Role;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.net.URI;
 import java.util.List;
 
@@ -35,12 +41,21 @@ public class TestController {
     }
 
     // Tạo test mới
-    @PostMapping
-    public ResponseEntity<Test> createTest(@RequestBody Test test) {
-        Test savedTest = testService.save(test);
-        return ResponseEntity.created(URI.create("/api/tests/" + savedTest.getTestId()))
-                .body(savedTest); // 201 Created
+    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<TestResponse> createTest(
+            @RequestParam("data") String dataJson,
+            @RequestPart(value = "banner", required = false) MultipartFile bannerFile
+    ) throws IOException {
+        // Convert JSON string sang DTO
+        ObjectMapper mapper = new ObjectMapper();
+        TestRequest request = mapper.readValue(dataJson, TestRequest.class);
+
+        TestResponse response = testService.createTest(request, bannerFile);
+        return ResponseEntity.ok(response);
     }
+
+
+
 
     // Cập nhật test
     @PutMapping("/{id}")
@@ -64,9 +79,49 @@ public class TestController {
                 .orElseGet(() -> ResponseEntity.notFound().build()); // 404 Not Found
     }
 
-    @PostMapping("/practice")
-    public TestResponse createPracticeTest(@RequestBody TestRequest request) {
-        return testService.createTest(request);
+    @PostMapping(value = "/pratise", consumes = {"multipart/form-data"})
+
+    public TestResponse createPracticeTest(
+            @RequestPart("data") TestRequest request,
+            @RequestPart(value = "banner", required = false) MultipartFile bannerFile
+    ) throws IOException {
+        return testService.createTest(request, bannerFile);
     }
+
+
+    @GetMapping("/admin")
+    public List<Test> getAllTestsByAdmin() {
+        return testService.getAllTestsByAdmin();
+    }
+
+    // Lấy test theo userId cụ thể
+    @GetMapping("/user/{userId}")
+    public List<Test> getTestsByUser(@PathVariable Long userId) {
+        return testService.getTestsByUser(userId);
+    }
+
+    // Lấy tất cả tests của Admin theo examTypeId
+    /*
+    Giải thích từng bước:
+
+Bước 1: testService.getAllTestsByAdmin() - Lấy tất cả test từ service (dành cho admin)
+Bước 2: .stream() - Chuyển danh sách thành stream để xử lý functional
+Bước 3: .filter(t -> t.getExamTypeId().equals(examTypeId)) - Lọc chỉ giữ lại các Test có examTypeId khớp với tham số
+Bước 4: .toList() - Chuyển stream kết quả thành List
+     */
+    @GetMapping("/admin/by-exam-type/{examTypeId}")
+    public ResponseEntity<List<Test>> getAdminTestsByExamType(@PathVariable Long examTypeId) {
+        List<Test> adminTests = testService.getAllTestsByAdmin()
+                .stream()
+                .filter(t -> t.getExamTypeId().equals(examTypeId))
+                .toList();
+        return ResponseEntity.ok(adminTests);
+    }
+
+
+
+
+
+
 
 }

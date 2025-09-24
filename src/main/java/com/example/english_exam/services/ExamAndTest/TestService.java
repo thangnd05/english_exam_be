@@ -1,5 +1,6 @@
 package com.example.english_exam.services.ExamAndTest;
 
+import com.example.english_exam.cloudinary.CloudinaryService;
 import com.example.english_exam.dto.request.PartRequest;
 import com.example.english_exam.dto.request.TestRequest;
 import com.example.english_exam.dto.response.AnswerResponse;
@@ -9,7 +10,9 @@ import com.example.english_exam.dto.response.TestResponse;
 import com.example.english_exam.models.*;
 import com.example.english_exam.repositories.*;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -22,13 +25,21 @@ public class TestService {
     private final TestPartRepository testPartRepository;
     private final TestQuestionRepository testQuestionRepository;
     private final AnswerService answerService;
+    private final RoleRepository  roleRepository;
+    private final UserRepository userRepository;
+    private final CloudinaryService  cloudinaryService;
+    private final ExamTypeRepository examTypeRepository;
 
-    public TestService(TestRepository testRepository, QuestionRepository questionRepository, TestPartRepository testPartRepository, TestQuestionRepository testQuestionRepository, AnswerService answerService) {
+    public TestService(TestRepository testRepository, QuestionRepository questionRepository, TestPartRepository testPartRepository, TestQuestionRepository testQuestionRepository, AnswerService answerService, RoleRepository roleRepository, UserRepository userRepository, CloudinaryService cloudinaryService, ExamTypeRepository examTypeRepository) {
         this.testRepository = testRepository;
         this.questionRepository = questionRepository;
         this.testPartRepository = testPartRepository;
         this.testQuestionRepository = testQuestionRepository;
         this.answerService = answerService;
+        this.roleRepository = roleRepository;
+        this.userRepository = userRepository;
+        this.cloudinaryService = cloudinaryService;
+        this.examTypeRepository = examTypeRepository;
     }
 
     public List<Test> getAllTests() {
@@ -48,36 +59,49 @@ public class TestService {
         testRepository.deleteById(id);
     }
 
-    public TestResponse createTest(TestRequest request) {
-        // 1. Tạo Test
+    public TestResponse createTest(TestRequest request, MultipartFile bannerFile) throws IOException {
+        // Lấy examType để lấy default duration
+        ExamType examType = examTypeRepository.findById(request.getExamTypeId())
+                .orElseThrow(() -> new RuntimeException("ExamType not found"));
+
+        // Tạo test
         Test test = new Test();
         test.setTitle(request.getTitle());
         test.setDescription(request.getDescription());
         test.setExamTypeId(request.getExamTypeId());
         test.setCreatedBy(request.getStudentId());
         test.setCreatedAt(LocalDateTime.now());
+
+        // Duration: custom nếu có, default nếu không
+        test.setDurationMinutes(request.getDurationMinutes() != null
+                ? request.getDurationMinutes()
+                : examType.getDurationMinutes());
+
+        // Upload banner nếu có
+        if (bannerFile != null && !bannerFile.isEmpty()) {
+            String url = cloudinaryService.uploadImage(bannerFile);
+            test.setBannerUrl(url);
+        }
+
+        // Lưu test
         test = testRepository.save(test);
 
+        // Tạo parts và random câu hỏi
         List<TestPartResponse> partResponses = new ArrayList<>();
-
-        // 2. Với mỗi part → random câu hỏi
         for (PartRequest partReq : request.getParts()) {
-            // 2a. Tạo TestPart
             TestPart testPart = new TestPart();
             testPart.setTestId(test.getTestId());
             testPart.setExamPartId(partReq.getExamPartId());
             testPart.setNumQuestions(partReq.getNumQuestions());
             testPart = testPartRepository.save(testPart);
 
-            // 2b. Lấy hoặc random câu hỏi
             List<Question> questions = questionRepository.findRandomByExamPart(
                     partReq.getExamPartId(), partReq.getNumQuestions());
 
             List<QuestionResponse> questionResponses = new ArrayList<>();
-
             for (Question q : questions) {
-                // 2c. Chỉ tạo TestQuestion nếu chưa gắn vào testPart
-                boolean alreadyLinked = testQuestionRepository.existsByQuestionIdAndTestPartId(q.getQuestionId(), testPart.getTestPartId());
+                boolean alreadyLinked = testQuestionRepository
+                        .existsByQuestionIdAndTestPartId(q.getQuestionId(), testPart.getTestPartId());
                 if (!alreadyLinked) {
                     TestQuestion tq = new TestQuestion();
                     tq.setTestPartId(testPart.getTestPartId());
@@ -85,10 +109,7 @@ public class TestService {
                     testQuestionRepository.save(tq);
                 }
 
-                // 2d. Lấy đáp án
                 List<AnswerResponse> answerResponses = answerService.getAnswersByQuestionId(q.getQuestionId());
-
-                // 2e. Tạo QuestionResponse
                 questionResponses.add(new QuestionResponse(
                         q.getQuestionId(),
                         q.getExamPartId(),
@@ -101,7 +122,6 @@ public class TestService {
                 ));
             }
 
-            // 2f. Tạo TestPartResponse
             partResponses.add(new TestPartResponse(
                     testPart.getTestPartId(),
                     testPart.getExamPartId(),
@@ -110,7 +130,7 @@ public class TestService {
             ));
         }
 
-        // 3. Trả về TestResponse
+        // Trả response
         return new TestResponse(
                 test.getTestId(),
                 test.getTitle(),
@@ -118,8 +138,34 @@ public class TestService {
                 test.getExamTypeId(),
                 test.getCreatedBy(),
                 test.getCreatedAt(),
+                test.getBannerUrl(),
+                test.getDurationMinutes(), // duration thực tế
                 partResponses
         );
     }
+
+
+    public List<Test> getAllTestsByAdmin() {
+        Role adminRole = roleRepository.findByRoleName("Admin");
+        if (adminRole == null) return new ArrayList<>();
+
+        List<User> adminUsers = userRepository.findByRoleId(adminRole.getRoleId());
+        if (adminUsers.isEmpty()) return new ArrayList<>();
+
+        List<Test> result = new ArrayList<>();
+        for (User admin : adminUsers) {
+            result.addAll(testRepository.findByCreatedBy(admin.getUserId()));
+        }
+
+        return result;
+    }
+
+    // Lấy test theo userId cụ thể
+    public List<Test> getTestsByUser(Long userId) {
+        return testRepository.findByCreatedBy(userId);
+    }
+
+
+
 
 }

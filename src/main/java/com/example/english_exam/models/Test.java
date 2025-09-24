@@ -30,5 +30,8 @@ public class Test {
 
     @Column(nullable = true)
     private Integer durationMinutes; // thời gian riêng cho part (nếu muốn)
+
+    @Column(length = 500) // đủ dài để chứa URL
+    private String bannerUrl;
 }
 
