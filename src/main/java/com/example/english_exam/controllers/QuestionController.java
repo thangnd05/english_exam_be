@@ -1,7 +1,7 @@
 package com.example.english_exam.controllers;
 
 import com.example.english_exam.dto.request.QuestionRequest;
-import com.example.english_exam.dto.response.QuestionResponse;
+import com.example.english_exam.dto.response.admin.QuestionAdminResponse;
 import com.example.english_exam.models.Question;
 import com.example.english_exam.services.ExamAndTest.QuestionService;
 import org.springframework.http.ResponseEntity;
@@ -32,11 +32,13 @@ public class QuestionController {
     }
 
     @PostMapping
-    public ResponseEntity<QuestionResponse> createQuestionWithAnswers(
+    public ResponseEntity<QuestionAdminResponse> createQuestionWithAnswers(
             @RequestBody QuestionRequest request) {
-        QuestionResponse response = questionService.createQuestionWithAnswers(request);
+
+        QuestionAdminResponse response = questionService.createQuestionWithAnswersAdmin(request);
         return ResponseEntity.ok(response);
     }
+
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteQuestion(@PathVariable Long id) {

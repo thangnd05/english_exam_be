@@ -1,6 +1,7 @@
 package com.example.english_exam.services.ExamAndTest;
 
-import com.example.english_exam.dto.response.AnswerResponse;
+import com.example.english_exam.dto.response.admin.AnswerAdminResponse;
+import com.example.english_exam.dto.response.user.AnswerResponse;
 import com.example.english_exam.models.Answer;
 import com.example.english_exam.repositories.AnswerRepository;
 import org.springframework.stereotype.Service;
@@ -42,9 +43,20 @@ public class AnswerService {
                 .map(ans -> new AnswerResponse(
                         ans.getAnswerId(),
                         ans.getAnswerText(),
-                        ans.getIsCorrect(),
                         ans.getAnswerLabel()
                 ))
                 .collect(Collectors.toList());
+    }
+
+    public List<AnswerAdminResponse> getAnswersByQuestionIdForAdmin(Long questionId) {
+        List<Answer> answers = answerRepository.findByQuestionId(questionId);
+        return answers.stream()
+                .map(a -> new AnswerAdminResponse(
+                        a.getAnswerId(),
+                        a.getAnswerText(),
+                        a.getIsCorrect(),
+                        a.getAnswerLabel()
+                ))
+                .toList();
     }
 }

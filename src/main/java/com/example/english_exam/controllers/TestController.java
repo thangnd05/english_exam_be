@@ -1,19 +1,17 @@
 package com.example.english_exam.controllers;
 
 import com.example.english_exam.dto.request.TestRequest;
-import com.example.english_exam.dto.response.TestResponse;
+import com.example.english_exam.dto.response.admin.TestAdminResponse;
+import com.example.english_exam.dto.response.user.TestResponse;
 import com.example.english_exam.models.Test;
-import com.example.english_exam.models.User;
 import com.example.english_exam.services.ExamAndTest.TestService;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.catalina.Role;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.net.URI;
 import java.util.List;
 
 @RestController
@@ -39,6 +37,19 @@ public class TestController {
                 .map(ResponseEntity::ok)   // 200 OK
                 .orElse(ResponseEntity.notFound().build()); // 404 Not Found
     }
+
+    @GetMapping("/usertest/{testId}")
+    public ResponseEntity<TestResponse> getTestFullById(@PathVariable Long testId) {
+        TestResponse response = testService.getTestFullById(testId);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/admintest/{testId}")
+    public ResponseEntity<TestAdminResponse> getTestByIdAdmin(@PathVariable Long testId) {
+        TestAdminResponse response = testService.getTestFullByIdAdmin(testId);
+        return ResponseEntity.ok(response);
+    }
+
 
     // Tạo test mới
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -79,12 +90,15 @@ public class TestController {
                 .orElseGet(() -> ResponseEntity.notFound().build()); // 404 Not Found
     }
 
-    @PostMapping(value = "/pratise", consumes = {"multipart/form-data"})
-
+    @PostMapping(value = "/pratise", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public TestResponse createPracticeTest(
-            @RequestPart("data") TestRequest request,
+            @RequestParam("data") String dataJson,
             @RequestPart(value = "banner", required = false) MultipartFile bannerFile
     ) throws IOException {
+        // parse JSON sang DTO
+        ObjectMapper mapper = new ObjectMapper();
+        TestRequest request = mapper.readValue(dataJson, TestRequest.class);
+
         return testService.createTest(request, bannerFile);
     }
 

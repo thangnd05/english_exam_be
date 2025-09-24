@@ -1,9 +1,10 @@
 package com.example.english_exam.services.ExamAndTest;
 
 import com.example.english_exam.dto.request.AnswerRequest;
-import com.example.english_exam.dto.response.AnswerResponse;
+import com.example.english_exam.dto.response.*;
 import com.example.english_exam.dto.request.QuestionRequest;
-import com.example.english_exam.dto.response.QuestionResponse;
+import com.example.english_exam.dto.response.admin.AnswerAdminResponse;
+import com.example.english_exam.dto.response.admin.QuestionAdminResponse;
 import com.example.english_exam.models.Answer;
 import com.example.english_exam.models.Passage;
 import com.example.english_exam.models.Question;
@@ -52,7 +53,7 @@ public class QuestionService {
         return questionRepository.save(question);
     }
 
-    public QuestionResponse createQuestionWithAnswers(QuestionRequest request) {
+    public QuestionAdminResponse createQuestionWithAnswersAdmin(QuestionRequest request) {
 
         // 1. Tạo question
         Question question = new Question();
@@ -67,7 +68,6 @@ public class QuestionService {
         // 2. Tạo answers dựa trên questionType
         switch (question.getQuestionType()) {
             case MCQ:
-                // MCQ: tạo nhiều đáp án từ request
                 for (AnswerRequest ar : request.getAnswers()) {
                     Answer ans = new Answer();
                     ans.setQuestionId(question.getQuestionId());
@@ -79,7 +79,6 @@ public class QuestionService {
                 break;
 
             case FILL_BLANK:
-                // FILL_BLANK: chỉ 1 đáp án chuẩn
                 if (request.getAnswers() != null && !request.getAnswers().isEmpty()) {
                     AnswerRequest ar = request.getAnswers().get(0);
                     Answer ans = new Answer();
@@ -92,36 +91,47 @@ public class QuestionService {
                 break;
 
             case ESSAY:
-                // ESSAY: không cần tạo answer, user sẽ viết vào answer_text
+                // ESSAY: không tạo answer
                 break;
 
             default:
                 throw new IllegalArgumentException("Unknown question type: " + question.getQuestionType());
         }
 
-        // SỬA LẠI NHƯ SAU:
-
-// 3. Truy vấn lại passage để lấy context và sinh explanation
-// Lấy passage từ DB nếu câu hỏi này có passageId
+        // 3. Truy vấn passage nếu có
         Passage passageContext = null;
+        PassageResponse passageResponse = null;
         if (question.getPassageId() != null) {
-            passageContext = passageRepository.findById(question.getPassageId())
-                    .orElse(null); // orElse(null) để tránh lỗi nếu ID không tồn tại
+            passageContext = passageRepository.findById(question.getPassageId()).orElse(null);
+            if (passageContext != null) {
+                passageResponse = new PassageResponse(
+                        passageContext.getPassageId(),
+                        passageContext.getContent(),
+                        passageContext.getMediaUrl(),
+                        passageContext.getPassageType().name()
+                );
+            }
         }
 
+        // 4. Sinh explanation nếu chưa có
         if (question.getExplanation() == null || question.getExplanation().isEmpty()) {
-            // Truyền cả passageContext vào cho AI
             String explanation = geminiService.explainQuestion(question, answerEntities, passageContext);
             question.setExplanation(explanation);
             question = questionRepository.save(question);
         }
 
-        // 4. Chuyển answers sang DTO
-        List<AnswerResponse> answerResponses = answerEntities.stream()
-                .map(a -> new AnswerResponse(a.getAnswerId(), a.getAnswerText(), a.getIsCorrect(), a.getAnswerLabel()))
+        // 5. Convert answers sang DTO (có isCorrect)
+        List<AnswerAdminResponse> answerAdminResponses = answerEntities.stream()
+                .map(a -> new AnswerAdminResponse(
+                        a.getAnswerId(),
+                        a.getAnswerText(),
+                        a.getIsCorrect(),   // có isCorrect
+                        a.getAnswerLabel()
+                ))
                 .collect(Collectors.toList());
 
-        // 5. Gán câu hỏi vào test_part nếu có
+
+        // 6. Gán vào test_part nếu có
         if (request.getTestPartId() != null) {
             TestQuestion tq = new TestQuestion();
             tq.setTestPartId(request.getTestPartId());
@@ -129,18 +139,19 @@ public class QuestionService {
             testQuestionRepository.save(tq);
         }
 
-        // 6. Trả về response
-        return new QuestionResponse(
+        // 7. Trả về DTO admin
+        return new QuestionAdminResponse(
                 question.getQuestionId(),
                 question.getExamPartId(),
-                question.getPassageId(),
                 question.getQuestionText(),
                 question.getQuestionType(),
                 question.getExplanation(),
-                answerResponses,
-                request.getTestPartId()
+                request.getTestPartId(),
+                passageResponse,
+                answerAdminResponses
         );
     }
+
 
     public void deleteById(Long id) {
         questionRepository.deleteById(id);
