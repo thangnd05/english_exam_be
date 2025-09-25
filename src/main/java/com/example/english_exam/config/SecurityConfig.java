@@ -37,12 +37,12 @@ public class SecurityConfig {
         JwtAuthenticationFilter jwtFilter = new JwtAuthenticationFilter(jwtService, userService);
 
         http
-                .csrf(csrf -> csrf.disable())
+                .csrf(csrf -> csrf.disable())   // bắt buộc
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll()
-                        .requestMatchers("/api/tests/**").permitAll() // <-- cho phép gọi API test
-                        .requestMatchers("/api/exam-types/**").permitAll() // <-- cho phép gọi API test
-
+                        .requestMatchers("/api/tests/**").permitAll()
+                        .requestMatchers("/api/user-tests/**").permitAll()
+                        .requestMatchers("/api/user-answers/**").permitAll()
 
                         .requestMatchers("/api/admin/**").hasAuthority("ROLE_ADMIN")
                         .requestMatchers("/api/user/**").hasAuthority("ROLE_USER")

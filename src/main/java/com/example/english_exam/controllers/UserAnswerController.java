@@ -1,20 +1,28 @@
 package com.example.english_exam.controllers;
 
+import com.example.english_exam.dto.request.UserAnswerRequest;
+import com.example.english_exam.models.Answer;
 import com.example.english_exam.models.UserAnswer;
+import com.example.english_exam.services.ExamAndTest.AnswerService;
 import com.example.english_exam.services.ExamAndTest.UserAnswerService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/user-answers")
 public class UserAnswerController {
 
     private final UserAnswerService userAnswerService;
+    private final AnswerService answerService;
 
-    public UserAnswerController(UserAnswerService userAnswerService) {
+    public UserAnswerController(UserAnswerService userAnswerService, AnswerService answerService) {
         this.userAnswerService = userAnswerService;
+        this.answerService = answerService;
     }
 
     @GetMapping
@@ -59,4 +67,49 @@ public class UserAnswerController {
                 })
                 .orElse(ResponseEntity.notFound().build()); // 404 Not Found
     }
+
+    @PostMapping("/batch")
+    public ResponseEntity<?> saveUserAnswers(@RequestBody List<UserAnswerRequest> requests) {
+        for (UserAnswerRequest a : requests) {
+            UserAnswer ua = new UserAnswer();
+            ua.setUserTestId(a.getUserTestId());
+            ua.setQuestionId(a.getQuestionId());
+            ua.setSelectedAnswerId(a.getSelectedAnswerId());
+            ua.setAnswerText(a.getAnswerText());
+
+            userAnswerService.save(ua);
+        }
+
+        return ResponseEntity.ok("Saved all answers!");
+    }
+
+    @GetMapping("/user-test/{userTestId}/result")
+    public ResponseEntity<?> getResult(@PathVariable Long userTestId) {
+        List<UserAnswer> userAnswers = userAnswerService.findByUserTestId(userTestId);
+
+        int correct = 0;
+        int wrong = 0;
+
+        for (UserAnswer ua : userAnswers) {
+            if (ua.getSelectedAnswerId() != null) {
+                Answer ans = answerService.findById(ua.getSelectedAnswerId()).orElse(null);
+                if (ans != null) {
+                    if (Boolean.TRUE.equals(ans.getIsCorrect())) {
+                        correct++;
+                    } else {
+                        wrong++;
+                    }
+                }
+            }
+        }
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("correct", correct);
+        result.put("wrong", wrong);
+        result.put("total", correct + wrong);
+
+        return ResponseEntity.ok(result);
+    }
+
+
 }
