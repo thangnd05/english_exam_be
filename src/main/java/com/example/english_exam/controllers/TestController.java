@@ -14,6 +14,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/tests")
@@ -157,20 +158,33 @@ Bước 4: .toList() - Chuyển stream kết quả thành List
 
     // Lấy danh sách test theo examTypeId cho user
     @GetMapping("/user/by-exam-type/{examTypeId}")
-    public ResponseEntity<List<TestResponse>> getTestsByExamTypeForUser(
+    public ResponseEntity<List<TestResponse>> getTestsByExamType(
             @PathVariable Long examTypeId,
-            @RequestParam Long userId
+            // Dùng Optional<> để biến userId thành không bắt buộc
+            @RequestParam Optional<Long> userId
     ) {
-        // Lấy tất cả test của admin
+        // 1. Lấy danh sách bài thi gốc
         List<Test> tests = testService.getAllTestsByAdmin()
                 .stream()
                 .filter(t -> t.getExamTypeId().equals(examTypeId))
                 .toList();
 
-        // Chuyển sang TestResponse, tính lượt còn lại cho user
-        List<TestResponse> responses = tests.stream()
-                .map(t -> testService.getTestFullById(t.getTestId(), userId))
-                .toList();
+        List<TestResponse> responses;
+
+        // 2. Kiểm tra xem userId có tồn tại không
+        if (userId.isPresent()) {
+            // Nếu CÓ userId, lấy thông tin đầy đủ
+            Long currentUserId = userId.get();
+            responses = tests.stream()
+                    .map(test -> testService.getTestFullById(test.getTestId(), currentUserId))
+                    .toList();
+        } else {
+            // Nếu KHÔNG có userId, chỉ lấy thông tin công khai
+            // (Bạn cần có một cách để chuyển Test -> TestResponse mà không cần userId)
+            responses = tests.stream()
+                    .map(test -> new TestResponse(test)) // Giả sử bạn có constructor này
+                    .toList();
+        }
 
         return ResponseEntity.ok(responses);
     }
