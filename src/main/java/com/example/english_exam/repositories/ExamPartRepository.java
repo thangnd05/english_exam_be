@@ -9,4 +9,8 @@ import java.util.List;
 @Repository
 public interface ExamPartRepository extends JpaRepository<ExamPart, Long> {
     List<ExamPart> findByExamTypeId(Long examTypeId);
+
+    ExamPart findByName(String name);
+
+
 }

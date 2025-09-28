@@ -1,6 +1,8 @@
 package com.example.english_exam.controllers;
 
+import com.example.english_exam.dto.request.NormalQuestionRequest;
 import com.example.english_exam.dto.request.QuestionRequest;
+import com.example.english_exam.dto.response.admin.NormalQuestionAdminResponse;
 import com.example.english_exam.dto.response.admin.QuestionAdminResponse;
 import com.example.english_exam.models.Question;
 import com.example.english_exam.services.ExamAndTest.QuestionService;
@@ -44,5 +46,13 @@ public class QuestionController {
     public ResponseEntity<Void> deleteQuestion(@PathVariable Long id) {
         questionService.deleteById(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/normal")
+    public ResponseEntity<NormalQuestionAdminResponse> createNormalQuestion(
+            @RequestBody NormalQuestionRequest request) {
+
+        NormalQuestionAdminResponse response = questionService.createNormalQuestion(request);
+        return ResponseEntity.ok(response);
     }
 }
