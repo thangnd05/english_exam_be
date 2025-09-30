@@ -17,8 +17,6 @@ public class QuestionResponse {
     private QuestionType questionType;
     private String explanation;
     private Long testPartId;
-
-    private PassageResponse passage;          // thay vì passageId
     private List<AnswerResponse> answers;   // chỉ có answerId, answerText, answerLabel
 
 

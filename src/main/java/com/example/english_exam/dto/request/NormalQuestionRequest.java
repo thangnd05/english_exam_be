@@ -10,7 +10,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class NormalQuestionRequest {
-    private Long passageId; // optional
+    private PassageRequest passage; // ✅ THÊM DÒNG NÀY
     private String questionText;
     private QuestionType questionType;
     private List<AnswerRequest> answers;

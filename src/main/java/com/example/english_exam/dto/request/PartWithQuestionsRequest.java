@@ -6,5 +6,6 @@ import java.util.List;
 @Data
 public class PartWithQuestionsRequest {
     private Long examPartId;
+    private PassageRequest passage;
     private List<NormalQuestionRequest> questions;
 }

@@ -58,7 +58,9 @@ public class TestService {
         testRepository.deleteById(id);
     }
 
+    @Transactional
     public TestResponse createTest(TestRequest request, MultipartFile bannerFile) throws IOException {
+        // === PHẦN TẠO TEST CHÍNH ===
         ExamType examType = examTypeRepository.findById(request.getExamTypeId())
                 .orElseThrow(() -> new RuntimeException("ExamType not found"));
 
@@ -80,10 +82,11 @@ public class TestService {
             test.setBannerUrl(url);
         }
 
-        // ✅ SỬA ĐỔI: Gán trạng thái ban đầu khi tạo. Logic này vẫn đúng.
         test = testRepository.save(test);
 
         List<TestPartResponse> partResponses = new ArrayList<>();
+
+        // === LẶP QUA CÁC PART ===
         for (PartRequest partReq : request.getParts()) {
             TestPart testPart = new TestPart();
             testPart.setTestId(test.getTestId());
@@ -91,56 +94,71 @@ public class TestService {
             testPart.setNumQuestions(partReq.getNumQuestions());
             testPart = testPartRepository.save(testPart);
 
+            final Long testPartId = testPart.getTestPartId();
+
+
+            // Lấy các câu hỏi ngẫu nhiên cho part này (1 query)
             List<Question> questions = questionRepository.findRandomByExamPart(
                     partReq.getExamPartId(), partReq.getNumQuestions());
 
-            List<QuestionResponse> questionResponses = new ArrayList<>();
-            for (Question q : questions) {
-                boolean alreadyLinked = testQuestionRepository
-                        .existsByQuestionIdAndTestPartId(q.getQuestionId(), testPart.getTestPartId());
-                if (!alreadyLinked) {
-                    TestQuestion tq = new TestQuestion();
-                    tq.setTestPartId(testPart.getTestPartId());
-                    tq.setQuestionId(q.getQuestionId());
-                    testQuestionRepository.save(tq);
-                }
+            if (questions.isEmpty()) {
+                partResponses.add(new TestPartResponse(testPart.getTestPartId(), testPart.getExamPartId(), 0, null, Collections.emptyList()));
+                continue;
+            }
 
-                PassageResponse passageResponse = null;
-                if (q.getPassageId() != null) {
-                    Passage passage = passageRepository.findById(q.getPassageId()).orElse(null);
-                    if (passage != null) {
-                        passageResponse = new PassageResponse(
-                                passage.getPassageId(),
-                                passage.getContent(),
-                                passage.getMediaUrl(),
-                                passage.getPassageType().name()
-                        );
-                    }
-                }
+            // --- BƯỚC 1: TỐI ƯU HÓA - LẤY DỮ LIỆU HÀNG LOẠT ---
+            List<Long> questionIds = questions.stream().map(Question::getQuestionId).toList();
 
-                List<AnswerResponse> answerResponses = answerService.getAnswersByQuestionId(q.getQuestionId());
+            List<TestQuestion> testQuestionsToSave = new ArrayList<>();
+            for (Long qId : questionIds) {
+                TestQuestion tq = new TestQuestion();
+                tq.setTestPartId(testPart.getTestPartId());
+                tq.setQuestionId(qId);
+                testQuestionsToSave.add(tq);
+            }
+            testQuestionRepository.saveAll(testQuestionsToSave);
 
-                QuestionResponse qr = new QuestionResponse(
+            Set<Long> passageIds = questions.stream().map(Question::getPassageId).filter(Objects::nonNull).collect(Collectors.toSet());
+            Map<Long, Passage> passageMap = passageRepository.findAllById(passageIds).stream()
+                    .collect(Collectors.toMap(Passage::getPassageId, p -> p));
+
+            Map<Long, List<AnswerResponse>> answersByQuestionId = answerService.getAnswersForMultipleQuestions(questionIds);
+
+            // --- BƯỚC 2: LẮP RÁP DỮ LIỆU ĐÃ LẤY ---
+
+            PassageResponse passageResponseForPart = questions.stream()
+                    .map(Question::getPassageId)
+                    .filter(Objects::nonNull)
+                    .findFirst()
+                    .map(passageMap::get)
+                    .map(p -> new PassageResponse(p.getPassageId(), p.getContent(), p.getMediaUrl(), p.getPassageType().name()))
+                    .orElse(null);
+
+            List<QuestionResponse> questionResponses = questions.stream().map(q -> {
+                List<AnswerResponse> answers = answersByQuestionId.getOrDefault(q.getQuestionId(), Collections.emptyList());
+
+                return new QuestionResponse(
                         q.getQuestionId(),
                         q.getExamPartId(),
                         q.getQuestionText(),
                         q.getQuestionType(),
                         q.getExplanation(),
-                        testPart.getTestPartId(),
-                        passageResponse,
-                        answerResponses
+                        testPartId,  // ✅ dùng biến final thay vì testPart
+                        answers
                 );
-                questionResponses.add(qr);
-            }
+            }).toList();
+
 
             partResponses.add(new TestPartResponse(
                     testPart.getTestPartId(),
                     testPart.getExamPartId(),
                     testPart.getNumQuestions(),
+                    passageResponseForPart,
                     questionResponses
             ));
         }
 
+        // --- DÒNG RETURN HOÀN CHỈNH ---
         return new TestResponse(
                 test.getTestId(),
                 test.getTitle(),
@@ -152,13 +170,14 @@ public class TestService {
                 test.getDurationMinutes(),
                 test.getAvailableFrom(),
                 test.getAvailableTo(),
-                test.calculateStatus().name(), // ✅ luôn tính lại
+                test.calculateStatus().name(),
                 test.getMaxAttempts(),
-                0,
-                test.getMaxAttempts(),
+                0, // Mới tạo nên attemptsUsed = 0
+                test.getMaxAttempts(), // remainingAttempts = maxAttempts
                 partResponses
         );
     }
+
 
     public List<Test> getAllTestsByAdmin() {
         Role adminRole = roleRepository.findByRoleName("Admin");
@@ -179,155 +198,203 @@ public class TestService {
     }
 
     public TestResponse getTestFullById(Long testId, Long userId) {
+        // === LẤY DỮ LIỆU CƠ BẢN ===
         Test test = testRepository.findById(testId)
                 .orElseThrow(() -> new RuntimeException("Test not found"));
-
         TestStatus currentStatus = test.calculateStatus();
-
-        // Đếm số lần user đã làm bài test này
         int attemptsUsed = userTestRepository.countByUserIdAndTestId(userId, testId);
+        Integer maxAttempts = test.getMaxAttempts();
+        Integer remaining = (maxAttempts != null) ? Math.max(0, maxAttempts - attemptsUsed) : null;
 
-        // Xử lý maxAttempts null = không giới hạn
-        Integer maxAttempts = test.getMaxAttempts(); // có thể null
-        Integer remaining = null; // mặc định null = không giới hạn
-        if (maxAttempts != null) {
-            remaining = Math.max(0, maxAttempts - attemptsUsed);
-        }
+        // === BƯỚC 1: LẤY DỮ LIỆU HÀNG LOẠT ĐỂ TỐI ƯU HÓA (BATCH FETCHING) ===
 
+        // Lấy tất cả TestPart của Test (1 query)
         List<TestPart> testParts = testPartRepository.findByTestId(test.getTestId());
+        if (testParts.isEmpty()) {
+            // Trả về sớm nếu không có phần nào
+            return new TestResponse(
+                    test.getTestId(),
+                    test.getTitle(),
+                    test.getDescription(),
+                    test.getExamTypeId(),
+                    test.getCreatedBy(),
+                    test.getCreatedAt(),
+                    test.getBannerUrl(),
+                    test.getDurationMinutes(),
+                    test.getAvailableFrom(),
+                    test.getAvailableTo(),
+                    currentStatus.name(),
+                    maxAttempts,
+                    attemptsUsed,
+                    remaining,
+                    Collections.emptyList()
+            );
+
+        }
+        List<Long> testPartIds = testParts.stream().map(TestPart::getTestPartId).toList();
+
+        // Lấy tất cả TestQuestion của các TestPart (1 query)
+        List<TestQuestion> allTestQuestions = testQuestionRepository.findByTestPartIdIn(testPartIds);
+        Map<Long, List<TestQuestion>> questionsByPartId = allTestQuestions.stream()
+                .collect(Collectors.groupingBy(TestQuestion::getTestPartId));
+
+        // Lấy tất cả Question từ các TestQuestion (1 query)
+        List<Long> allQuestionIds = allTestQuestions.stream().map(TestQuestion::getQuestionId).toList();
+        Map<Long, Question> questionMap = questionRepository.findAllById(allQuestionIds).stream()
+                .collect(Collectors.toMap(Question::getQuestionId, q -> q));
+
+        // Lấy tất cả Passage liên quan (1 query)
+        Set<Long> allPassageIds = questionMap.values().stream()
+                .map(Question::getPassageId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<Long, Passage> passageMap = passageRepository.findAllById(allPassageIds).stream()
+                .collect(Collectors.toMap(Passage::getPassageId, p -> p));
+
+        // Lấy tất cả Answer liên quan (1 query)
+        Map<Long, List<AnswerResponse>> answersByQuestionId = answerService.getAnswersForMultipleQuestions(allQuestionIds);
+
+        // === BƯỚC 2: LẮP RÁP DỮ LIỆU TRONG BỘ NHỚ (NO MORE DATABASE CALLS) ===
 
         List<TestPartResponse> partResponses = testParts.stream().map(tp -> {
-            List<TestQuestion> tqList = testQuestionRepository.findByTestPartId(tp.getTestPartId());
+
+            List<TestQuestion> tqList = questionsByPartId.getOrDefault(tp.getTestPartId(), Collections.emptyList());
+
+            // Lấy passage cho cả part này
+            PassageResponse passageResponseForPart = tqList.stream()
+                    .map(tq -> questionMap.get(tq.getQuestionId()))
+                    .filter(q -> q != null && q.getPassageId() != null)
+                    .findFirst() // Chỉ cần tìm thấy passage đầu tiên là đủ
+                    .map(q -> passageMap.get(q.getPassageId()))
+                    .filter(Objects::nonNull)
+                    .map(p -> new PassageResponse(p.getPassageId(), p.getContent(), p.getMediaUrl(), p.getPassageType().name()))
+                    .orElse(null); // Sẽ là null nếu không có câu hỏi nào có passage
 
             List<QuestionResponse> questionResponses = tqList.stream().map(tq -> {
-                Question q = questionRepository.findById(tq.getQuestionId()).orElse(null);
+                Question q = questionMap.get(tq.getQuestionId());
                 if (q == null) return null;
 
-                PassageResponse passageResponse = null;
-                if (q.getPassageId() != null) {
-                    Passage passage = passageRepository.findById(q.getPassageId()).orElse(null);
-                    if (passage != null) {
-                        passageResponse = new PassageResponse(
-                                passage.getPassageId(),
-                                passage.getContent(),
-                                passage.getMediaUrl(),
-                                passage.getPassageType().name()
-                        );
-                    }
-                }
+                List<AnswerResponse> answers = answersByQuestionId.getOrDefault(q.getQuestionId(), Collections.emptyList());
 
-                List<AnswerResponse> answers = answerService.getAnswersByQuestionId(q.getQuestionId());
+                // Constructor của QuestionResponse giờ đã đơn giản hơn
                 return new QuestionResponse(
-                        q.getQuestionId(),
-                        q.getExamPartId(),
-                        q.getQuestionText(),
-                        q.getQuestionType(),
-                        q.getExplanation(),
-                        tp.getTestPartId(),
-                        passageResponse,
+                        q.getQuestionId(), q.getExamPartId(), q.getQuestionText(),
+                        q.getQuestionType(), q.getExplanation(), tp.getTestPartId(),
                         answers
                 );
             }).filter(Objects::nonNull).toList();
 
+            // Gán passageResponse vào TestPartResponse
             return new TestPartResponse(
-                    tp.getTestPartId(),
-                    tp.getExamPartId(),
-                    tp.getNumQuestions(),
-                    questionResponses
+                    tp.getTestPartId(), tp.getExamPartId(), tp.getNumQuestions(), passageResponseForPart, questionResponses
             );
         }).toList();
 
+        // === BƯỚC 3: TRẢ VỀ RESPONSE ===
         return new TestResponse(
-                test.getTestId(),
-                test.getTitle(),
-                test.getDescription(),
-                test.getExamTypeId(),
-                test.getCreatedBy(),
-                test.getCreatedAt(),
-                test.getBannerUrl(),
-                test.getDurationMinutes(),
-                test.getAvailableFrom(),
-                test.getAvailableTo(),
-                currentStatus.name(),
-                maxAttempts,
-                attemptsUsed,
-                remaining,
-                partResponses
+                test.getTestId(), test.getTitle(), test.getDescription(), test.getExamTypeId(),
+                test.getCreatedBy(), test.getCreatedAt(), test.getBannerUrl(), test.getDurationMinutes(),
+                test.getAvailableFrom(), test.getAvailableTo(), currentStatus.name(),
+                maxAttempts, attemptsUsed, remaining, partResponses
         );
     }
 
+// Giả sử phương thức này nằm trong TestService.java
 
     public TestAdminResponse getTestFullByIdAdmin(Long testId) {
+        // === LẤY DỮ LIỆU CƠ BẢN ===
         Test test = testRepository.findById(testId)
                 .orElseThrow(() -> new RuntimeException("Test not found"));
 
+        // === BƯỚC 1: LẤY DỮ LIỆU HÀNG LOẠT ĐỂ TỐI ƯU HÓA (BATCH FETCHING) ===
+
+        // Lấy tất cả TestPart của Test (1 query)
         List<TestPart> testParts = testPartRepository.findByTestId(test.getTestId());
+        if (testParts.isEmpty()) {
+            return new TestAdminResponse(
+                    test.getTestId(),
+                    test.getTitle(),
+                    test.getDescription(),
+                    test.getExamTypeId(),
+                    test.getCreatedBy(),
+                    test.getCreatedAt(),
+                    test.getBannerUrl(),
+                    test.getDurationMinutes(),
+                    test.getAvailableFrom(),
+                    test.getAvailableTo(),
+                    test.calculateStatus().name(),
+                    test.getMaxAttempts(),
+                    Collections.emptyList()
+            );
+        }
+
+        List<Long> testPartIds = testParts.stream().map(TestPart::getTestPartId).toList();
+
+        // Lấy tất cả TestQuestion của các TestPart (1 query)
+        List<TestQuestion> allTestQuestions = testQuestionRepository.findByTestPartIdIn(testPartIds);
+        Map<Long, List<TestQuestion>> questionsByPartId = allTestQuestions.stream()
+                .collect(Collectors.groupingBy(TestQuestion::getTestPartId));
+
+        // Lấy tất cả Question từ các TestQuestion (1 query)
+        List<Long> allQuestionIds = allTestQuestions.stream().map(TestQuestion::getQuestionId).toList();
+        Map<Long, Question> questionMap = questionRepository.findAllById(allQuestionIds).stream()
+                .collect(Collectors.toMap(Question::getQuestionId, q -> q));
+
+        // Lấy tất cả Passage liên quan (1 query)
+        Set<Long> allPassageIds = questionMap.values().stream()
+                .map(Question::getPassageId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<Long, Passage> passageMap = passageRepository.findAllById(allPassageIds).stream()
+                .collect(Collectors.toMap(Passage::getPassageId, p -> p));
+
+        // Lấy tất cả Answer liên quan cho admin (1 query)
+        Map<Long, List<AnswerAdminResponse>> answersByQuestionId = answerService.getAnswersForMultipleQuestionsForAdmin(allQuestionIds);
+
+        // === BƯỚC 2: LẮP RÁP DỮ LIỆU TRONG BỘ NHỚ (NO MORE DATABASE CALLS) ===
 
         List<TestPartAdminResponse> partResponses = testParts.stream().map(tp -> {
-            List<TestQuestion> tqList = testQuestionRepository.findByTestPartId(tp.getTestPartId());
-            List<QuestionAdminResponse> questionResponses = tqList.stream().map(tq -> {
-                Question q = questionRepository.findById(tq.getQuestionId()).orElse(null);
-                if (q == null) return null;
-                PassageResponse passageResponse = null;
-                if (q.getPassageId() != null) {
-                    Passage passage = passageRepository.findById(q.getPassageId()).orElse(null);
-                    if (passage != null) {
-                        passageResponse = new PassageResponse(
-                                passage.getPassageId(),
-                                passage.getContent(),
-                                passage.getMediaUrl(),
-                                passage.getPassageType().name()
-                        );
-                    }
-                }
-                List<AnswerAdminResponse> answers = answerService.getAnswersByQuestionIdForAdmin(q.getQuestionId())
-                        .stream()
-                        .map(a -> new AnswerAdminResponse(
-                                a.getAnswerId(),
-                                a.getAnswerText(),
-                                a.getIsCorrect(),
-                                a.getAnswerLabel()
-                        ))
-                        .toList();
 
+            List<TestQuestion> tqList = questionsByPartId.getOrDefault(tp.getTestPartId(), Collections.emptyList());
+
+            // Lấy passage cho cả part này
+            PassageResponse passageResponseForPart = tqList.stream()
+                    .map(tq -> questionMap.get(tq.getQuestionId()))
+                    .filter(q -> q != null && q.getPassageId() != null)
+                    .findFirst()
+                    .map(q -> passageMap.get(q.getPassageId()))
+                    .filter(Objects::nonNull)
+                    .map(p -> new PassageResponse(p.getPassageId(), p.getContent(), p.getMediaUrl(), p.getPassageType().name()))
+                    .orElse(null);
+
+            List<QuestionAdminResponse> questionResponses = tqList.stream().map(tq -> {
+                Question q = questionMap.get(tq.getQuestionId());
+                if (q == null) return null;
+
+                List<AnswerAdminResponse> answers = answersByQuestionId.getOrDefault(q.getQuestionId(), Collections.emptyList());
+
+                // Constructor của QuestionAdminResponse giờ đã đơn giản hơn
                 return new QuestionAdminResponse(
-                        q.getQuestionId(),
-                        q.getExamPartId(),
-                        q.getQuestionText(),
-                        q.getQuestionType(),
-                        q.getExplanation(),
-                        tp.getTestPartId(),
-                        passageResponse,
+                        q.getQuestionId(), q.getExamPartId(), q.getQuestionText(),
+                        q.getQuestionType(), q.getExplanation(), tp.getTestPartId(),
                         answers
                 );
             }).filter(Objects::nonNull).toList();
 
+            // Gán passageResponse vào TestPartAdminResponse
             return new TestPartAdminResponse(
-                    tp.getTestPartId(),
-                    tp.getExamPartId(),
-                    tp.getNumQuestions(),
-                    questionResponses
+                    tp.getTestPartId(), tp.getExamPartId(), tp.getNumQuestions(), passageResponseForPart, questionResponses
             );
         }).toList();
 
+        // === BƯỚC 3: TRẢ VỀ RESPONSE ===
         return new TestAdminResponse(
-                test.getTestId(),
-                test.getTitle(),
-                test.getDescription(),
-                test.getExamTypeId(),
-                test.getCreatedBy(),
-                test.getCreatedAt(),
-                test.getBannerUrl(),
-                test.getDurationMinutes(),
-                test.getAvailableFrom(),
-                test.getAvailableTo(),
-                // ✅ SỬA ĐỔI: Luôn tính toán lại status cho Admin.
-                test.calculateStatus().name(),
-                test.getMaxAttempts(),
-                partResponses
+                test.getTestId(), test.getTitle(), test.getDescription(), test.getExamTypeId(),
+                test.getCreatedBy(), test.getCreatedAt(), test.getBannerUrl(), test.getDurationMinutes(),
+                test.getAvailableFrom(), test.getAvailableTo(), test.calculateStatus().name(),
+                test.getMaxAttempts(), partResponses
         );
     }
-
 
     public Map<String, Object> canStartTest(Long userId, Test test) {
         LocalDateTime now = LocalDateTime.now();
@@ -361,9 +428,10 @@ public class TestService {
 
 
     @Transactional
-    public TestResponse createTestWithNewQuestions(CreateTestWithQuestionsRequest request, MultipartFile bannerFile) throws IOException {
+    public TestResponse createTestWithNewQuestions(CreateTestWithQuestionsRequest request,
+                                                   MultipartFile bannerFile) throws IOException {
 
-        // === BƯỚC 1: TẠO ĐỐI TƯỢNG TEST CHÍNH ===
+        // === BƯỚC 1: TẠO TEST CHÍNH ===
         ExamType examType = examTypeRepository.findById(request.getExamTypeId())
                 .orElseThrow(() -> new RuntimeException("ExamType not found with id: " + request.getExamTypeId()));
 
@@ -379,35 +447,57 @@ public class TestService {
         test.setMaxAttempts(request.getMaxAttempts());
 
         if (bannerFile != null && !bannerFile.isEmpty()) {
-            // String url = cloudinaryService.uploadImage(bannerFile);
-            // test.setBannerUrl(url);
+            String url = cloudinaryService.uploadImage(bannerFile);
+            test.setBannerUrl(url);
         }
 
         test = testRepository.save(test);
 
-        // === BƯỚC 2 & 3: TẠO CÁC PHẦN, CÂU HỎI VÀ BUILD RESPONSE TƯƠNG ỨNG ===
         List<TestPartResponse> partResponses = new ArrayList<>();
 
+        // === BƯỚC 2: LẶP QUA PARTS TRONG REQUEST ===
         for (PartWithQuestionsRequest partReq : request.getParts()) {
 
+            // 2.1: Tạo TestPart
             TestPart testPart = new TestPart();
             testPart.setTestId(test.getTestId());
             testPart.setExamPartId(partReq.getExamPartId());
             testPart.setNumQuestions(partReq.getQuestions().size());
             testPart = testPartRepository.save(testPart);
 
-            List<QuestionResponse> questionResponses = new ArrayList<>();
-            for (NormalQuestionRequest questionReq : partReq.getQuestions()) {
+            // 2.2: Nếu có passage thì tạo passage 1 lần cho cả part
+            Long passageId = null;
+            PassageResponse passageResponse = null;
+            if (partReq.getPassage() != null) {
+                Passage newPassage = new Passage();
+                newPassage.setContent(partReq.getPassage().getContent());
+                newPassage.setMediaUrl(partReq.getPassage().getMediaUrl());
+                newPassage.setPassageType(partReq.getPassage().getPassageType());
 
-                // --- 2.1 Tạo và lưu Question ---
+                Passage savedPassage = passageRepository.save(newPassage);
+                passageId = savedPassage.getPassageId();
+
+                passageResponse = new PassageResponse(
+                        savedPassage.getPassageId(),
+                        savedPassage.getContent(),
+                        savedPassage.getMediaUrl(),
+                        savedPassage.getPassageType().name()
+                );
+            }
+
+            List<QuestionResponse> questionResponses = new ArrayList<>();
+
+            // 2.3: Lặp qua từng câu hỏi
+            for (NormalQuestionRequest questionReq : partReq.getQuestions()) {
+                // Tạo question
                 Question newQuestion = new Question();
                 newQuestion.setExamPartId(testPart.getExamPartId());
-                newQuestion.setPassageId(questionReq.getPassageId());
+                newQuestion.setPassageId(passageId); // tất cả question dùng chung passage của part
                 newQuestion.setQuestionText(questionReq.getQuestionText());
                 newQuestion.setQuestionType(questionReq.getQuestionType());
                 newQuestion = questionRepository.save(newQuestion);
 
-                // --- 2.2 Tạo và lưu Answers ---
+                // Tạo answers
                 List<Answer> newAnswers = new ArrayList<>();
                 if (questionReq.getAnswers() != null && !questionReq.getAnswers().isEmpty()) {
                     List<Answer> answersToSave = new ArrayList<>();
@@ -422,50 +512,49 @@ public class TestService {
                             ans.setAnswerLabel(""); // Gán chuỗi rỗng nếu label là null
                             ans.setIsCorrect(true);
                         }
+
                         answersToSave.add(ans);
-
-
                     }
                     newAnswers = answerRepository.saveAll(answersToSave);
                 }
 
-                // --- 2.3 Tạo liên kết Test-Question ---
+                // Tạo liên kết Test-Question
                 TestQuestion testQuestionLink = new TestQuestion();
                 testQuestionLink.setTestPartId(testPart.getTestPartId());
                 testQuestionLink.setQuestionId(newQuestion.getQuestionId());
                 testQuestionRepository.save(testQuestionLink);
 
-                // --- 3.1 Build response cho Passage, Answer, và Question ---
-                PassageResponse passageResponse = null;
-                if (newQuestion.getPassageId() != null) {
-                    Passage passage = passageRepository.findById(newQuestion.getPassageId()).orElse(null);
-                    if (passage != null) {
-                        passageResponse = new PassageResponse(
-                                passage.getPassageId(), passage.getContent(),
-                                passage.getMediaUrl(), passage.getPassageType().name()
-                        );
-                    }
-                }
-
+                // Build QuestionResponse
                 List<AnswerResponse> answerResponses = newAnswers.stream()
-                        .map(ans -> new AnswerResponse(ans.getAnswerId(), ans.getAnswerText(), ans.getAnswerLabel()))
+                        .map(ans -> new AnswerResponse(
+                                ans.getAnswerId(),
+                                ans.getAnswerText(),
+                                ans.getAnswerLabel()
+                        ))
                         .collect(Collectors.toList());
 
                 questionResponses.add(new QuestionResponse(
-                        newQuestion.getQuestionId(), testPart.getExamPartId(), newQuestion.getQuestionText(),
-                        newQuestion.getQuestionType(), null, testPart.getTestPartId(),
-                        passageResponse, answerResponses
+                        newQuestion.getQuestionId(),
+                        testPart.getExamPartId(),
+                        newQuestion.getQuestionText(),
+                        newQuestion.getQuestionType(),
+                        null, // explanation chưa có
+                        testPart.getTestPartId(),
+                        answerResponses
                 ));
             }
 
-            // --- 3.2 Build response cho TestPart ---
+            // Build TestPartResponse
             partResponses.add(new TestPartResponse(
-                    testPart.getTestPartId(), testPart.getExamPartId(),
-                    testPart.getNumQuestions(), questionResponses
+                    testPart.getTestPartId(),
+                    testPart.getExamPartId(),
+                    testPart.getNumQuestions(),
+                    passageResponse,
+                    questionResponses
             ));
         }
 
-        // === BƯỚC 4: BUILD VÀ TRẢ VỀ TEST RESPONSE HOÀN CHỈNH ===
+        // === BƯỚC 3: TRẢ VỀ RESPONSE HOÀN CHỈNH ===
         return new TestResponse(
                 test.getTestId(),
                 test.getTitle(),
@@ -477,14 +566,12 @@ public class TestService {
                 test.getDurationMinutes(),
                 test.getAvailableFrom(),
                 test.getAvailableTo(),
-                test.calculateStatus().name(), // Tính toán trạng thái ban đầu
+                test.calculateStatus().name(),
                 test.getMaxAttempts(),
-                0, // attemptsUsed khi mới tạo là 0
-                test.getMaxAttempts(), // remainingAttempts khi mới tạo bằng maxAttempts
+                0, // attemptsUsed mặc định = 0 khi tạo mới
+                test.getMaxAttempts(), // remainingAttempts = maxAttempts
                 partResponses
         );
     }
-
-
 
 }

@@ -16,7 +16,5 @@ public class QuestionAdminResponse {
     private QuestionType questionType;
     private String explanation;
     private Long testPartId;
-
-    private PassageResponse passage;
     private List<AnswerAdminResponse> answers;    // có isCorrect
 }

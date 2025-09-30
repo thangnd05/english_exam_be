@@ -22,4 +22,6 @@ public interface AnswerRepository extends JpaRepository<Answer, Long> {
 
     // Optional: kiểm tra đáp án theo question và answerId
     Optional<Answer> findByQuestionIdAndAnswerId(Long questionId, Long answerId);
+
+    List<Answer> findByQuestionIdIn(List<Long> questionIds);
 }

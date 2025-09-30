@@ -8,7 +8,7 @@ import java.util.List;
 
 @Repository
 public interface TestQuestionRepository extends JpaRepository<TestQuestion, Long> {
-    List<TestQuestion> findByTestPartId(Long testPartId);
+    List<TestQuestion> findByTestPartIdIn(List<Long> testPartIds);
     List<TestQuestion> findByQuestionId(Long questionId);
 
     boolean existsByQuestionIdAndTestPartId(Long questionId, Long testPartId);
