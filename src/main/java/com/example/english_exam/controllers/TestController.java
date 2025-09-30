@@ -1,11 +1,13 @@
 package com.example.english_exam.controllers;
 
+import com.example.english_exam.dto.request.CreateTestWithQuestionsRequest;
 import com.example.english_exam.dto.request.TestRequest;
 import com.example.english_exam.dto.response.admin.TestAdminResponse;
 import com.example.english_exam.dto.response.user.TestResponse;
 import com.example.english_exam.models.Test;
 import com.example.english_exam.services.ExamAndTest.TestService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -206,6 +208,36 @@ Bước 4: .toList() - Chuyển stream kết quả thành List
         }
 
         return ResponseEntity.ok(result);
+    }
+
+    @PostMapping(path = "/create-with-questions", consumes = "multipart/form-data")
+    public ResponseEntity<?> createTestWithNewQuestions(
+            // ✅ Sửa 1: Nhận JSON dưới dạng String bằng @RequestParam
+            @RequestParam("testData") String testDataJson,
+            // ✅ Sửa 2: Đổi tên key của file cho nhất quán với ví dụ của bạn (tùy chọn)
+            @RequestPart(value = "bannerFile", required = false) MultipartFile bannerFile) {
+
+        try {
+            // ✅ Sửa 3: Dùng ObjectMapper để chuyển đổi String JSON thành đối tượng DTO
+            CreateTestWithQuestionsRequest request = objectMapper.readValue(
+                    testDataJson,
+                    CreateTestWithQuestionsRequest.class
+            );
+
+            TestResponse newTest = testService.createTestWithNewQuestions(request, bannerFile);
+            return ResponseEntity.status(HttpStatus.CREATED).body(newTest);
+
+        } catch (IOException e) { // ✅ Bắt cả IOException từ objectMapper
+            e.printStackTrace();
+            return ResponseEntity
+                    .status(HttpStatus.BAD_REQUEST) // Lỗi 400 hợp lý hơn nếu JSON sai định dạng
+                    .body("Error processing test data: " + e.getMessage());
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity
+                    .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Error creating test: " + e.getMessage());
+        }
     }
 
 

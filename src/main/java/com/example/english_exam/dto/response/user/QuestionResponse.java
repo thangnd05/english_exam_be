@@ -20,4 +20,7 @@ public class QuestionResponse {
 
     private PassageResponse passage;          // thay vì passageId
     private List<AnswerResponse> answers;   // chỉ có answerId, answerText, answerLabel
+
+
+
 }

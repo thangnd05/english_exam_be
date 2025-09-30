@@ -53,4 +53,6 @@ public class TestResponse {
         this.remainingAttempts = null;
         this.parts = null; // Hoặc bạn có thể map sang parts công khai nếu cần
     }
+
+
 }

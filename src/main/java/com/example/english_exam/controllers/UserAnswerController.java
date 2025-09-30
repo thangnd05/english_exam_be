@@ -1,6 +1,7 @@
 package com.example.english_exam.controllers;
 
 import com.example.english_exam.dto.request.UserAnswerRequest;
+import com.example.english_exam.dto.response.ResultSummaryDto;
 import com.example.english_exam.models.Answer;
 import com.example.english_exam.models.UserAnswer;
 import com.example.english_exam.services.ExamAndTest.AnswerService;
@@ -84,30 +85,9 @@ public class UserAnswerController {
     }
 
     @GetMapping("/user-test/{userTestId}/result")
-    public ResponseEntity<?> getResult(@PathVariable Long userTestId) {
-        List<UserAnswer> userAnswers = userAnswerService.findByUserTestId(userTestId);
-
-        int correct = 0;
-        int wrong = 0;
-
-        for (UserAnswer ua : userAnswers) {
-            if (ua.getSelectedAnswerId() != null) {
-                Answer ans = answerService.findById(ua.getSelectedAnswerId()).orElse(null);
-                if (ans != null) {
-                    if (Boolean.TRUE.equals(ans.getIsCorrect())) {
-                        correct++;
-                    } else {
-                        wrong++;
-                    }
-                }
-            }
-        }
-
-        Map<String, Object> result = new HashMap<>();
-        result.put("correct", correct);
-        result.put("wrong", wrong);
-        result.put("total", correct + wrong);
-
+    public ResponseEntity<ResultSummaryDto> getResult(@PathVariable Long userTestId) {
+        // ✅ Chỉ cần gọi phương thức service và trả về kết quả
+        ResultSummaryDto result = userAnswerService.getResultSummary(userTestId);
         return ResponseEntity.ok(result);
     }
 

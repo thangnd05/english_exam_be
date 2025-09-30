@@ -1,13 +1,10 @@
 package com.example.english_exam.services.ExamAndTest;
 
-import com.example.english_exam.dto.request.AnswerRequest;
-import com.example.english_exam.dto.request.NormalQuestionRequest;
+import com.example.english_exam.dto.request.*;
 import com.example.english_exam.dto.response.*;
-import com.example.english_exam.dto.request.QuestionRequest;
 import com.example.english_exam.dto.response.admin.AnswerAdminResponse;
 import com.example.english_exam.dto.response.admin.NormalQuestionAdminResponse;
 import com.example.english_exam.dto.response.admin.QuestionAdminResponse;
-import com.example.english_exam.dto.response.user.AnswerResponse;
 import com.example.english_exam.models.*;
 import com.example.english_exam.repositories.*;
 import com.example.english_exam.services.ApiExtend.GeminiService;
@@ -36,10 +33,6 @@ public class QuestionService {
 
     public Optional<Question> findById(Long id) {
         return questionRepository.findById(id);
-    }
-
-    public List<Question> findByExamPart(Long examPartId) {
-        return questionRepository.findByExamPartId(examPartId);
     }
 
     public Question save(Question question) {

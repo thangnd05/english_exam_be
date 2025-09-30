@@ -15,7 +15,6 @@ import java.util.stream.Collectors;
 public class UserTestService {
     private static final Logger log = LoggerFactory.getLogger(UserTestService.class);
 
-    // --- Các repository đã có ---
     private final UserTestRepository userTestRepository;
     private final UserAnswerRepository userAnswerRepository;
     private final AnswerRepository answerRepository;
@@ -66,8 +65,7 @@ public class UserTestService {
                 .orElseThrow(() -> new RuntimeException("ExamType not found"));
 
         String scoringMethod = examType.getScoringMethod() != null ? examType.getScoringMethod().toLowerCase() : "default";
-
-        log.debug("DEBUG: Scoring method for ExamType ID " + examType.getExamTypeId() + " is '" + scoringMethod + "'");
+        log.debug("DEBUG: Scoring method for ExamType ID {} is '{}'", examType.getExamTypeId(), scoringMethod);
 
         int totalScore;
         if ("toeic_scale".equalsIgnoreCase(scoringMethod)) {
@@ -82,30 +80,66 @@ public class UserTestService {
     }
 
     private int scoreDefault(List<UserAnswer> userAnswers) {
-        List<Long> questionIds = userAnswers.stream().map(UserAnswer::getQuestionId).toList();
-        Map<Long, Long> correctMap = answerRepository.findByQuestionIdInAndIsCorrectTrue(questionIds).stream()
-                .collect(Collectors.toMap(Answer::getQuestionId, Answer::getAnswerId));
+        if (userAnswers.isEmpty()) {
+            return 0;
+        }
 
-        return (int) userAnswers.stream()
-                .filter(ua -> ua.getSelectedAnswerId() != null && ua.getSelectedAnswerId().equals(correctMap.get(ua.getQuestionId())))
-                .count();
+        // Tạo Set để lấy các ID câu hỏi duy nhất
+        Set<Long> questionIds = userAnswers.stream()
+                .map(UserAnswer::getQuestionId)
+                .collect(Collectors.toSet());
+
+        // Lấy thông tin của các câu hỏi
+        Map<Long, Question> questionMap = questionRepository.findAllById(questionIds).stream()
+                .collect(Collectors.toMap(Question::getQuestionId, q -> q));
+
+        // Lấy thông tin đáp án đúng đầy đủ
+        Map<Long, Answer> correctAnswersMap = answerRepository.findByQuestionIdInAndIsCorrectTrue(new ArrayList<>(questionIds)) // Chuyển Set thành List
+                .stream()
+                .collect(Collectors.toMap(Answer::getQuestionId, answer -> answer));
+
+        int correctCount = 0;
+        for (UserAnswer userAnswer : userAnswers) {
+            Long qId = userAnswer.getQuestionId();
+            Question question = questionMap.get(qId);
+            Answer correctAnswer = correctAnswersMap.get(qId);
+
+            if (question == null || correctAnswer == null) {
+                continue;
+            }
+
+            boolean isCorrect = false;
+            // Kiểm tra đúng/sai dựa trên loại câu hỏi
+            if (question.getQuestionType() == Question.QuestionType.MCQ) {
+                isCorrect = userAnswer.getSelectedAnswerId() != null &&
+                        userAnswer.getSelectedAnswerId().equals(correctAnswer.getAnswerId());
+            } else if (question.getQuestionType() == Question.QuestionType.FILL_BLANK) {
+                isCorrect = userAnswer.getAnswerText() != null &&
+                        userAnswer.getAnswerText().trim().equalsIgnoreCase(correctAnswer.getAnswerText().trim());
+            }
+
+            if (isCorrect) {
+                correctCount++;
+            }
+        }
+        return correctCount;
     }
 
     private int scoreToeicOptimal(List<UserAnswer> userAnswers, Test test, ExamType examType) {
         log.debug("===== START TOEIC SCORING DEBUG =====");
 
-        // 1. Lấy tất cả ID câu hỏi và ID đáp án đúng
+        // 1. Lấy thông tin Question đầy đủ
         List<Long> allQuestionIds = userAnswers.stream().map(UserAnswer::getQuestionId).toList();
-        Map<Long, Long> correctAnswersMap = answerRepository.findByQuestionIdInAndIsCorrectTrue(allQuestionIds)
-                .stream()
-                .collect(Collectors.toMap(Answer::getQuestionId, Answer::getAnswerId));
-
-        // 2. Lấy thông tin Question để lấy examPartId
         List<Question> questions = questionRepository.findAllById(allQuestionIds);
-        Map<Long, Long> questionToExamPartIdMap = questions.stream()
-                .collect(Collectors.toMap(Question::getQuestionId, Question::getExamPartId));
+        Map<Long, Question> questionMap = questions.stream()
+                .collect(Collectors.toMap(Question::getQuestionId, q -> q));
 
-        // 3. Lấy thông tin ExamPart để lấy skillId
+        // 2. Lấy thông tin đáp án đúng đầy đủ
+        Map<Long, Answer> correctAnswersMap = answerRepository.findByQuestionIdInAndIsCorrectTrue(allQuestionIds)
+                .stream()
+                .collect(Collectors.toMap(Answer::getQuestionId, answer -> answer));
+
+        // 3. Lấy thông tin ExamPart và Skill
         Set<Long> allExamPartIds = questions.stream().map(Question::getExamPartId).collect(Collectors.toSet());
         List<ExamPart> examParts = examPartRepository.findAllById(allExamPartIds);
         Map<Long, Long> examPartToSkillIdMap = examParts.stream()
@@ -115,21 +149,31 @@ public class UserTestService {
 
         for (UserAnswer ua : userAnswers) {
             Long questionId = ua.getQuestionId();
-            Long selectedAnswerId = ua.getSelectedAnswerId();
-            Long correctAnswerId = correctAnswersMap.get(questionId);
-            Long examPartId = questionToExamPartIdMap.get(questionId);
+            Question question = questionMap.get(questionId);
+            Answer correctAnswer = correctAnswersMap.get(questionId);
+
+            if (question == null || correctAnswer == null) {
+                continue;
+            }
+
+            // 4. Logic kiểm tra đúng/sai đã được nâng cấp
+            boolean isCorrect = false;
+            if (question.getQuestionType() == Question.QuestionType.MCQ) {
+                isCorrect = ua.getSelectedAnswerId() != null && ua.getSelectedAnswerId().equals(correctAnswer.getAnswerId());
+            } else if (question.getQuestionType() == Question.QuestionType.FILL_BLANK) {
+                isCorrect = ua.getAnswerText() != null && ua.getAnswerText().trim().equalsIgnoreCase(correctAnswer.getAnswerText().trim());
+            }
+
+            Long examPartId = question.getExamPartId();
             Long skillId = examPartId != null ? examPartToSkillIdMap.get(examPartId) : null;
 
-            boolean isCorrect = selectedAnswerId != null && selectedAnswerId.equals(correctAnswerId);
             if (isCorrect && skillId != null) {
                 skillCorrectCount.merge(skillId, 1, Integer::sum);
             }
-
-            log.debug("QuestionId: {}, Selected: {}, Correct: {}, ExamPartId: {}, SkillId: {}, IsCorrect: {}",
-                    questionId, selectedAnswerId, correctAnswerId, examPartId, skillId, isCorrect);
+            log.debug("QuestionId: {}, Type: {}, IsCorrect: {}", questionId, question.getQuestionType(), isCorrect);
         }
 
-        // Quy đổi điểm
+        // 5. Quy đổi điểm
         int totalScore = 0;
         for (Map.Entry<Long, Integer> entry : skillCorrectCount.entrySet()) {
             Long skillId = entry.getKey();
@@ -141,12 +185,10 @@ public class UserTestService {
                     .orElse(5);
 
             totalScore += convertedScore;
-
             log.debug("SkillId: {}, NumCorrect: {}, ConvertedScore: {}", skillId, numCorrect, convertedScore);
         }
 
-        // Xử lý trường hợp skill không đúng câu nào
-        Set<Long> allSkillIdsInTest = examParts.stream().map(ExamPart::getSkillId).collect(Collectors.toSet());
+        Set<Long> allSkillIdsInTest = examParts.stream().map(ExamPart::getSkillId).filter(Objects::nonNull).collect(Collectors.toSet());
         for (Long skillId : allSkillIdsInTest) {
             if (!skillCorrectCount.containsKey(skillId)) {
                 int convertedScore = scoringConversionRepository
@@ -154,7 +196,6 @@ public class UserTestService {
                         .map(ScoringConversion::getConvertedScore)
                         .orElse(5);
                 totalScore += convertedScore;
-
                 log.debug("SkillId: {}, NumCorrect: 0, ConvertedScore (0 correct): {}", skillId, convertedScore);
             }
         }
@@ -164,7 +205,7 @@ public class UserTestService {
         return totalScore;
     }
 
-    // --- Các phương thức khác giữ nguyên ---
+    // --- Các phương thức CRUD khác ---
     public List<UserTest> findAll() { return userTestRepository.findAll(); }
     public Optional<UserTest> findById(Long id) { return userTestRepository.findById(id); }
     public List<UserTest> findByUserId(Long userId) { return userTestRepository.findByUserId(userId); }
