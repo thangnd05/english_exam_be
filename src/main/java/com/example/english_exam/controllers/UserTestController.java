@@ -2,26 +2,26 @@ package com.example.english_exam.controllers;
 
 import com.example.english_exam.models.UserTest;
 import com.example.english_exam.services.ExamAndTest.UserTestService;
+import lombok.AllArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
+import java.util.*;
 
 @RestController
 @RequestMapping("/api/user-tests")
+@AllArgsConstructor
 public class UserTestController {
 
     private final UserTestService userTestService;
 
-    public UserTestController(UserTestService userTestService) {
-        this.userTestService = userTestService;
-    }
-
+    // ✅ Lấy tất cả user test
     @GetMapping
     public ResponseEntity<List<UserTest>> getAll() {
         return ResponseEntity.ok(userTestService.findAll());
     }
 
+    // ✅ Lấy theo ID
     @GetMapping("/{id}")
     public ResponseEntity<UserTest> getById(@PathVariable Long id) {
         return userTestService.findById(id)
@@ -29,47 +29,96 @@ public class UserTestController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    // ✅ Lấy theo userId
     @GetMapping("/user/{userId}")
     public ResponseEntity<List<UserTest>> getByUser(@PathVariable Long userId) {
         return ResponseEntity.ok(userTestService.findByUserId(userId));
     }
 
+    // ✅ Lấy theo testId
     @GetMapping("/test/{testId}")
     public ResponseEntity<List<UserTest>> getByTest(@PathVariable Long testId) {
         return ResponseEntity.ok(userTestService.findByTestId(testId));
     }
 
+    // ✅ Tạo hoặc bắt đầu bài test mới
     @PostMapping
-    public ResponseEntity<UserTest> create(@RequestBody UserTest userTest) {
-        return ResponseEntity.ok(userTestService.save(userTest));
+    public ResponseEntity<?> startUserTest(@RequestBody Map<String, Long> request) {
+        try {
+            Long testId = request.get("testId");
+            Long userId = request.get("userId"); // 🟢 giờ FE gửi trực tiếp userId luôn
+
+            if (testId == null || userId == null) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Missing testId or userId"));
+            }
+
+            UserTest userTest = userTestService.startUserTest(testId, userId);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("message", "Bắt đầu làm bài thành công");
+            response.put("userTestId", userTest.getUserTestId());
+            response.put("status", userTest.getStatus() != null ? userTest.getStatus().name() : "UNKNOWN");
+
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));
+        }
     }
 
+    // ✅ Cập nhật UserTest
     @PutMapping("/{id}")
     public ResponseEntity<UserTest> update(@PathVariable Long id, @RequestBody UserTest userTest) {
         userTest.setUserTestId(id);
         return ResponseEntity.ok(userTestService.save(userTest));
     }
 
-    // --- Xóa user test ---
+    // ✅ Xóa UserTest
     @DeleteMapping("/{id}")
     public ResponseEntity<?> delete(@PathVariable Long id) {
         return userTestService.findById(id)
                 .map(existing -> {
                     userTestService.delete(id);
-                    return ResponseEntity.noContent().build(); // 204 No Content
+                    return ResponseEntity.noContent().build();
                 })
-                .orElse(ResponseEntity.notFound().build()); // 404 Not Found
+                .orElse(ResponseEntity.notFound().build());
     }
 
-    // --- Submit test ---
+    // ✅ Nộp bài thi
     @PostMapping("/{userTestId}/submit")
     public ResponseEntity<UserTest> submitTest(@PathVariable Long userTestId) {
         try {
             UserTest submittedTest = userTestService.submitTest(userTestId);
             return ResponseEntity.ok(submittedTest);
         } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().build(); // đổi từ notFound sang badRequest nếu lỗi submit
+            return ResponseEntity.badRequest().build();
         }
     }
 
+    // ✅ Kiểm tra có đang làm dở không
+    @GetMapping("/check-active")
+    public ResponseEntity<?> checkActiveUserTest(
+            @RequestParam Long testId,
+            @RequestParam Long userId
+    ) {
+        try {
+            Optional<UserTest> active = userTestService.findActiveUserTest(userId, testId);
+
+            Map<String, Object> response = new HashMap<>();
+            if (active.isPresent()) {
+                UserTest userTest = active.get();
+                response.put("userTestId", userTest.getUserTestId());
+                response.put("status", userTest.getStatus() != null ? userTest.getStatus().name() : "UNKNOWN");
+            } else {
+                response.put("userTestId", null);
+                response.put("status", "NONE");
+            }
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));
+        }
+    }
 }

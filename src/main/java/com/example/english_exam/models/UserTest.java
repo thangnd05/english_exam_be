@@ -28,4 +28,14 @@ public class UserTest {
     private LocalDateTime finishedAt;
 
     private Integer totalScore = 0;
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    private Status status = Status.IN_PROGRESS; // 🟢 mặc định khi bắt đầu thi
+
+    public enum Status {
+        IN_PROGRESS,
+        COMPLETED,
+        EXPIRED
+    }
 }

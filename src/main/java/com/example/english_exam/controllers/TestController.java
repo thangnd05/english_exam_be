@@ -18,6 +18,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+@CrossOrigin(origins = "http://localhost:3000")
+
 @RestController
 @RequestMapping("/api/tests")
 public class TestController {
@@ -212,38 +214,39 @@ Bước 4: .toList() - Chuyển stream kết quả thành List
 
     @PostMapping(path = "/create-with-questions", consumes = "multipart/form-data")
     public ResponseEntity<?> createTestWithNewQuestions(
-            // ✅ Sửa 1: Nhận JSON dưới dạng String bằng @RequestParam
+            // ✅ JSON test data
             @RequestParam("testData") String testDataJson,
-            // ✅ Sửa 2: Đổi tên key của file cho nhất quán với ví dụ của bạn (tùy chọn)
-            @RequestPart(value = "bannerFile", required = false) MultipartFile bannerFile) {
 
+            // ✅ File banner (tùy chọn)
+            @RequestPart(value = "bannerFile", required = false) MultipartFile bannerFile,
+
+            // ✅ Nhiều file audio (tùy chọn)
+            @RequestPart(value = "audioFiles", required = false) List<MultipartFile> audioFiles
+    ) {
         try {
-            // ✅ Sửa 3: Dùng ObjectMapper để chuyển đổi String JSON thành đối tượng DTO
+            // ✅ Chuyển JSON string → DTO
             CreateTestWithQuestionsRequest request = objectMapper.readValue(
                     testDataJson,
                     CreateTestWithQuestionsRequest.class
             );
 
-            TestResponse newTest = testService.createTestWithNewQuestions(request, bannerFile);
+            // ✅ Gọi service (truyền list audioFile)
+            TestResponse newTest = testService.createTestWithNewQuestions(request, bannerFile, audioFiles);
+
             return ResponseEntity.status(HttpStatus.CREATED).body(newTest);
 
-        } catch (IOException e) { // ✅ Bắt cả IOException từ objectMapper
+        } catch (IOException e) {
             e.printStackTrace();
             return ResponseEntity
-                    .status(HttpStatus.BAD_REQUEST) // Lỗi 400 hợp lý hơn nếu JSON sai định dạng
-                    .body("Error processing test data: " + e.getMessage());
+                    .status(HttpStatus.BAD_REQUEST)
+                    .body("❌ Error processing test data: " + e.getMessage());
         } catch (Exception e) {
             e.printStackTrace();
             return ResponseEntity
                     .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Error creating test: " + e.getMessage());
+                    .body("❌ Error creating test: " + e.getMessage());
         }
     }
-
-
-
-
-
 
 
 

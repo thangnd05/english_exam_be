@@ -13,6 +13,7 @@ import com.example.english_exam.dto.response.user.TestPartResponse;
 import com.example.english_exam.dto.response.user.TestResponse;
 import com.example.english_exam.models.*;
 import com.example.english_exam.repositories.*;
+import com.example.english_exam.security.JwtService;
 import jakarta.transaction.Transactional;
 import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -38,6 +39,8 @@ public class TestService {
     private final PassageRepository  passageRepository;
     private final UserTestRepository userTestRepository;
     private final AnswerRepository answerRepository;
+    private final JwtService jwtService;
+
 
 
 
@@ -429,7 +432,8 @@ public class TestService {
 
     @Transactional
     public TestResponse createTestWithNewQuestions(CreateTestWithQuestionsRequest request,
-                                                   MultipartFile bannerFile) throws IOException {
+                                                   MultipartFile bannerFile,
+                                                   List<MultipartFile> audioFiles) throws IOException {
 
         // === BƯỚC 1: TẠO TEST CHÍNH ===
         ExamType examType = examTypeRepository.findById(request.getExamTypeId())
@@ -454,25 +458,44 @@ public class TestService {
         test = testRepository.save(test);
 
         List<TestPartResponse> partResponses = new ArrayList<>();
+        int audioIndex = 0; // Đếm audio cho từng passage LISTENING
 
-        // === BƯỚC 2: LẶP QUA PARTS TRONG REQUEST ===
+        // === BƯỚC 2: LẶP QUA PARTS ===
         for (PartWithQuestionsRequest partReq : request.getParts()) {
-
-            // 2.1: Tạo TestPart
             TestPart testPart = new TestPart();
             testPart.setTestId(test.getTestId());
             testPart.setExamPartId(partReq.getExamPartId());
             testPart.setNumQuestions(partReq.getQuestions().size());
             testPart = testPartRepository.save(testPart);
 
-            // 2.2: Nếu có passage thì tạo passage 1 lần cho cả part
             Long passageId = null;
             PassageResponse passageResponse = null;
+
+            // === TẠO PASSAGE ===
             if (partReq.getPassage() != null) {
                 Passage newPassage = new Passage();
                 newPassage.setContent(partReq.getPassage().getContent());
-                newPassage.setMediaUrl(partReq.getPassage().getMediaUrl());
                 newPassage.setPassageType(partReq.getPassage().getPassageType());
+
+                // === Nếu là LISTENING thì lấy file audio tương ứng ===
+                if (newPassage.getPassageType() == Passage.PassageType.LISTENING) {
+                    if (audioFiles != null && audioIndex < audioFiles.size()) {
+                        MultipartFile audioFile = audioFiles.get(audioIndex);
+                        if (audioFile != null && !audioFile.isEmpty()) {
+                            // 🟢 Upload audio lên Cloudinary
+                            String audioUrl = cloudinaryService.uploadAudio(audioFile);
+                            newPassage.setMediaUrl(audioUrl);
+                            System.out.println("✅ Uploaded audio for passage: " + newPassage.getContent());
+                        } else {
+                            System.out.println("⚠️ Audio file " + audioIndex + " is empty or null");
+                        }
+                    } else {
+                        System.out.println("⚠️ No audio file provided for passage index " + audioIndex);
+                    }
+                    audioIndex++; // chỉ tăng khi passage là LISTENING
+                } else {
+                    newPassage.setMediaUrl(partReq.getPassage().getMediaUrl());
+                }
 
                 Passage savedPassage = passageRepository.save(newPassage);
                 passageId = savedPassage.getPassageId();
@@ -485,19 +508,17 @@ public class TestService {
                 );
             }
 
+            // === LẶP QUA CÂU HỎI ===
             List<QuestionResponse> questionResponses = new ArrayList<>();
 
-            // 2.3: Lặp qua từng câu hỏi
             for (NormalQuestionRequest questionReq : partReq.getQuestions()) {
-                // Tạo question
                 Question newQuestion = new Question();
                 newQuestion.setExamPartId(testPart.getExamPartId());
-                newQuestion.setPassageId(passageId); // tất cả question dùng chung passage của part
+                newQuestion.setPassageId(passageId);
                 newQuestion.setQuestionText(questionReq.getQuestionText());
                 newQuestion.setQuestionType(questionReq.getQuestionType());
                 newQuestion = questionRepository.save(newQuestion);
 
-                // Tạo answers
                 List<Answer> newAnswers = new ArrayList<>();
                 if (questionReq.getAnswers() != null && !questionReq.getAnswers().isEmpty()) {
                     List<Answer> answersToSave = new ArrayList<>();
@@ -505,32 +526,20 @@ public class TestService {
                         Answer ans = new Answer();
                         ans.setQuestionId(newQuestion.getQuestionId());
                         ans.setAnswerText(ar.getAnswerText());
-                        if (ar.getLabel() != null) {
-                            ans.setIsCorrect(ar.getIsCorrect() != null && ar.getIsCorrect());
-                            ans.setAnswerLabel(ar.getLabel());
-                        } else {
-                            ans.setAnswerLabel(""); // Gán chuỗi rỗng nếu label là null
-                            ans.setIsCorrect(true);
-                        }
-
+                        ans.setAnswerLabel(ar.getLabel() != null ? ar.getLabel() : "");
+                        ans.setIsCorrect(ar.getIsCorrect() != null && ar.getIsCorrect());
                         answersToSave.add(ans);
                     }
                     newAnswers = answerRepository.saveAll(answersToSave);
                 }
 
-                // Tạo liên kết Test-Question
-                TestQuestion testQuestionLink = new TestQuestion();
-                testQuestionLink.setTestPartId(testPart.getTestPartId());
-                testQuestionLink.setQuestionId(newQuestion.getQuestionId());
-                testQuestionRepository.save(testQuestionLink);
+                TestQuestion link = new TestQuestion();
+                link.setTestPartId(testPart.getTestPartId());
+                link.setQuestionId(newQuestion.getQuestionId());
+                testQuestionRepository.save(link);
 
-                // Build QuestionResponse
                 List<AnswerResponse> answerResponses = newAnswers.stream()
-                        .map(ans -> new AnswerResponse(
-                                ans.getAnswerId(),
-                                ans.getAnswerText(),
-                                ans.getAnswerLabel()
-                        ))
+                        .map(ans -> new AnswerResponse(ans.getAnswerId(), ans.getAnswerText(), ans.getAnswerLabel()))
                         .collect(Collectors.toList());
 
                 questionResponses.add(new QuestionResponse(
@@ -538,13 +547,13 @@ public class TestService {
                         testPart.getExamPartId(),
                         newQuestion.getQuestionText(),
                         newQuestion.getQuestionType(),
-                        null, // explanation chưa có
+                        null,
                         testPart.getTestPartId(),
                         answerResponses
                 ));
             }
 
-            // Build TestPartResponse
+            // === Build TestPartResponse ===
             partResponses.add(new TestPartResponse(
                     testPart.getTestPartId(),
                     testPart.getExamPartId(),
@@ -554,7 +563,7 @@ public class TestService {
             ));
         }
 
-        // === BƯỚC 3: TRẢ VỀ RESPONSE HOÀN CHỈNH ===
+        // === BƯỚC 3: TRẢ VỀ RESPONSE ===
         return new TestResponse(
                 test.getTestId(),
                 test.getTitle(),
@@ -568,8 +577,8 @@ public class TestService {
                 test.getAvailableTo(),
                 test.calculateStatus().name(),
                 test.getMaxAttempts(),
-                0, // attemptsUsed mặc định = 0 khi tạo mới
-                test.getMaxAttempts(), // remainingAttempts = maxAttempts
+                0,
+                test.getMaxAttempts(),
                 partResponses
         );
     }

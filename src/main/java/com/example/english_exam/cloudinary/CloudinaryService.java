@@ -25,15 +25,23 @@ public class CloudinaryService {
     }
 
     public String uploadImage(MultipartFile file) throws IOException {
-        Map uploadResult = cloudinary.uploader().upload(file.getBytes(), ObjectUtils.emptyMap());
+        Map uploadResult = cloudinary.uploader().upload(file.getBytes(),
+                ObjectUtils.asMap("resource_type", "image"));
+        return (String) uploadResult.get("secure_url");
+    }
+
+    public String uploadAudio(MultipartFile file) throws IOException {
+        Map uploadResult = cloudinary.uploader().upload(file.getBytes(),
+                ObjectUtils.asMap("resource_type", "auto")); // hoặc "video"
         return (String) uploadResult.get("secure_url");
     }
 
     public Map updateImage(String publicId, MultipartFile file) throws IOException {
-        return cloudinary.uploader().upload(file.getBytes(), ObjectUtils.asMap("public_id", publicId));
+        return cloudinary.uploader().upload(file.getBytes(),
+                ObjectUtils.asMap("public_id", publicId, "resource_type", "auto"));
     }
 
-    public void deleteImage(String publicId) throws IOException {
-        cloudinary.uploader().destroy(publicId, ObjectUtils.emptyMap());
+    public void deleteFile(String publicId) throws IOException {
+        cloudinary.uploader().destroy(publicId, ObjectUtils.asMap("resource_type", "auto"));
     }
 }

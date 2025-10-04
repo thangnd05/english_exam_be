@@ -50,6 +50,8 @@ public class UserTestService {
                 .orElseThrow(() -> new RuntimeException("UserTest not found"));
 
         userTest.setFinishedAt(LocalDateTime.now());
+        userTest.setStatus(UserTest.Status.COMPLETED); // 🟢 Cập nhật trạng thái đã nộp
+
 
         List<UserAnswer> userAnswers = userAnswerRepository.findByUserTestId(userTestId);
         if (userAnswers.isEmpty()) {
@@ -217,4 +219,35 @@ public class UserTestService {
             return true;
         }).orElse(false);
     }
+
+    @Transactional
+    public UserTest startUserTest(Long testId, Long userId) {
+        Test test = testRepository.findById(testId)
+                .orElseThrow(() -> new RuntimeException("Test not found with id: " + testId));
+
+        Optional<UserTest> existing = userTestRepository.findActiveUserTest(userId, testId, UserTest.Status.IN_PROGRESS);
+        if (existing.isPresent()) {
+            log.info("✅ Reusing existing UserTest for user {} test {}", userId, testId);
+            return existing.get();
+        }
+
+        UserTest newTest = new UserTest();
+        newTest.setUserId(userId);
+        newTest.setTestId(testId);
+        newTest.setStartedAt(LocalDateTime.now());
+        newTest.setStatus(UserTest.Status.IN_PROGRESS);
+        newTest.setTotalScore(0);
+
+        log.info("🆕 Created new UserTest for user {} test {}", userId, testId);
+        return userTestRepository.save(newTest);
+    }
+
+    public Optional<UserTest> findActiveUserTest(Long userId, Long testId) {
+        return userTestRepository.findActiveUserTest(userId, testId, UserTest.Status.IN_PROGRESS);
+    }
+
+
+
+
+
 }

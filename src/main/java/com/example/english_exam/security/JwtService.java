@@ -1,9 +1,12 @@
 package com.example.english_exam.security;
 
+import com.example.english_exam.repositories.UserRepository;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import jakarta.annotation.PostConstruct;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
@@ -25,6 +28,7 @@ public class JwtService {
     private long jwtRefreshExpiration;
 
     private SecretKey cachedSigningKey;
+    private UserRepository userRepository;
 
     // Khởi tạo key từ secretKey
     @PostConstruct
@@ -107,6 +111,41 @@ public class JwtService {
         Date expiration = extractClaim(token, Claims::getExpiration);
         return expiration != null && expiration.before(new Date());
     }
+
+    public String resolveTokenFromCookie(HttpServletRequest request) {
+        if (request.getCookies() == null) return null;
+        for (Cookie c : request.getCookies()) {
+            if ("accessToken".equals(c.getName())) {
+                return c.getValue();
+            }
+        }
+        return null;
+    }
+
+    // ✅ Trích xuất userId trực tiếp từ token trong cookie
+    public Long extractUserId(HttpServletRequest request) {
+        try {
+            String token = resolveTokenFromCookie(request);
+            if (token == null) {
+                throw new RuntimeException("Token not found in cookies");
+            }
+
+            // Lấy username (thường là email)
+            String username = extractUsername(token);
+            if (username == null) {
+                throw new RuntimeException("Invalid token: no username");
+            }
+
+            // Tìm userId tương ứng trong DB
+            return userRepository.findByUserNameOrEmail(username, username)
+                    .map(u -> u.getUserId())
+                    .orElseThrow(() -> new RuntimeException("User not found"));
+        } catch (Exception e) {
+            throw new RuntimeException("❌ Failed to extract userId from JWT: " + e.getMessage());
+        }
+    }
+
+
 }
 
 
