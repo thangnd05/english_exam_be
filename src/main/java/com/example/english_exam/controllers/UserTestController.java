@@ -1,5 +1,6 @@
 package com.example.english_exam.controllers;
 
+import com.example.english_exam.dto.response.UserTestResponse;
 import com.example.english_exam.models.UserTest;
 import com.example.english_exam.services.ExamAndTest.UserTestService;
 import lombok.AllArgsConstructor;
@@ -22,10 +23,20 @@ public class UserTestController {
     }
 
     // ✅ Lấy theo ID
-    @GetMapping("/{id}")
-    public ResponseEntity<UserTest> getById(@PathVariable Long id) {
-        return userTestService.findById(id)
-                .map(ResponseEntity::ok)
+    @GetMapping("/{userTestId}")
+    public ResponseEntity<UserTestResponse> getUserTestById(@PathVariable Long userTestId) {
+        return userTestService.findById(userTestId)
+                .map(ut -> ResponseEntity.ok(
+                        UserTestResponse.builder()
+                                .userTestId(ut.getUserTestId())
+                                .userId(ut.getUserId())
+                                .testId(ut.getTestId())
+                                .startedAt(ut.getStartedAt())
+                                .finishedAt(ut.getFinishedAt())
+                                .totalScore(ut.getTotalScore())
+                                .status(ut.getStatus().name())
+                                .build()
+                ))
                 .orElse(ResponseEntity.notFound().build());
     }
 
@@ -120,5 +131,14 @@ public class UserTestController {
             e.printStackTrace();
             return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));
         }
+    }
+
+    @GetMapping("/by-user/{userId}/by-test/{testId}")
+    public ResponseEntity<List<UserTestResponse>> getAttempts(
+            @PathVariable Long userId,
+            @PathVariable Long testId) {
+
+        List<UserTestResponse> res = userTestService.getAttemptsByUserAndTest(userId, testId);
+        return ResponseEntity.ok(res);
     }
 }

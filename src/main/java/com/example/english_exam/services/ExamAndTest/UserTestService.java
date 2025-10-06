@@ -1,11 +1,14 @@
 package com.example.english_exam.services.ExamAndTest;
 
+import com.example.english_exam.dto.response.UserTestResponse;
 import com.example.english_exam.models.*;
 import com.example.english_exam.repositories.*;
 import jakarta.transaction.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -244,6 +247,35 @@ public class UserTestService {
 
     public Optional<UserTest> findActiveUserTest(Long userId, Long testId) {
         return userTestRepository.findActiveUserTest(userId, testId, UserTest.Status.IN_PROGRESS);
+    }
+
+    public List<UserTestResponse> getAttemptsByUserAndTest(Long userId, Long testId) {
+        List<UserTest> list = userTestRepository.findByUserIdAndTestIdOrderByStartedAtDesc(userId, testId);
+        return list.stream().map(u -> UserTestResponse.builder()
+                .userTestId(u.getUserTestId())
+                .userId(u.getUserId())       // ✅ thêm
+                .testId(u.getTestId())       // ✅ thêm
+                .startedAt(u.getStartedAt())
+                .finishedAt(u.getFinishedAt())
+                .totalScore(u.getTotalScore())
+                .status(u.getStatus().name())
+                .build()
+        ).collect(Collectors.toList());
+    }
+
+
+    public UserTestResponse getMeta(Long userTestId) {
+        var ut = userTestRepository.findById(userTestId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "userTest not found"));
+        return UserTestResponse.builder()
+                .userTestId(ut.getUserTestId())
+                .testId(ut.getTestId())
+                .userId(ut.getUserId())
+                .startedAt(ut.getStartedAt())
+                .finishedAt(ut.getFinishedAt())
+                .totalScore(ut.getTotalScore())
+                .status(ut.getStatus().name())
+                .build();
     }
 
 
