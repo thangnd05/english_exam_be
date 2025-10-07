@@ -1,5 +1,6 @@
 package com.example.english_exam.services.ExamAndTest;
 
+import com.example.english_exam.cloudinary.CloudinaryService;
 import com.example.english_exam.dto.request.*;
 import com.example.english_exam.dto.response.*;
 import com.example.english_exam.dto.response.admin.AnswerAdminResponse;
@@ -13,7 +14,9 @@ import com.example.english_exam.services.ApiExtend.GeminiService;
 import jakarta.transaction.Transactional;
 import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -28,6 +31,7 @@ public class QuestionService {
     private final TestQuestionRepository testQuestionRepository;
     private final PassageRepository  passageRepository;
     private final ExamPartRepository examPartRepository;
+    private final CloudinaryService  cloudinaryService;
 
 
     public List<Question> findAll() {
@@ -264,4 +268,74 @@ public class QuestionService {
     public long countByExamPartId(Long examPartId) {
         return questionRepository.countByExamPartId(examPartId);
     }
+
+
+    @Transactional
+    public List<QuestionAdminResponse> createQuestionsWithPassage(
+            CreateQuestionsWithPassageRequest request,
+            MultipartFile audioFile
+    ) throws IOException {
+
+        List<QuestionAdminResponse> responses = new ArrayList<>();
+
+        // 1️⃣ Tạo Passage trước
+        Passage passage = new Passage();
+        passage.setContent(request.getPassage().getContent());
+        passage.setPassageType(request.getPassage().getPassageType());
+
+        if (passage.getPassageType() == Passage.PassageType.LISTENING && audioFile != null && !audioFile.isEmpty()) {
+            String audioUrl = cloudinaryService.uploadAudio(audioFile);
+            passage.setMediaUrl(audioUrl);
+        } else {
+            passage.setMediaUrl(request.getPassage().getMediaUrl());
+        }
+
+        passage = passageRepository.save(passage);
+
+        // 2️⃣ Tạo các Question cùng Passage
+        for (NormalQuestionRequest qReq : request.getQuestions()) {
+            Question question = new Question();
+            question.setExamPartId(request.getExamPartId());
+            question.setPassageId(passage.getPassageId());
+            question.setQuestionText(qReq.getQuestionText());
+            question.setQuestionType(qReq.getQuestionType());
+            question = questionRepository.save(question);
+
+            // 3️⃣ Lưu đáp án
+            List<Answer> answers = new ArrayList<>();
+            if (qReq.getAnswers() != null) {
+                for (AnswerRequest aReq : qReq.getAnswers()) {
+                    Answer ans = new Answer();
+                    ans.setQuestionId(question.getQuestionId());
+                    ans.setAnswerText(aReq.getAnswerText());
+                    ans.setAnswerLabel(aReq.getLabel());
+                    ans.setIsCorrect(aReq.getIsCorrect());
+                    answers.add(ans);
+                }
+                answerRepository.saveAll(answers);
+            }
+
+            // 4️⃣ Build Response
+            List<AnswerAdminResponse> answerDtos = answers.stream()
+                    .map(a -> new AnswerAdminResponse(
+                            a.getAnswerId(),
+                            a.getAnswerText(),
+                            a.getIsCorrect(),
+                            a.getAnswerLabel()))
+                    .toList();
+
+            responses.add(new QuestionAdminResponse(
+                    question.getQuestionId(),
+                    question.getExamPartId(),
+                    question.getQuestionText(),
+                    question.getQuestionType(),
+                    question.getExplanation(),
+                    null,
+                    answerDtos
+            ));
+        }
+
+        return responses;
+    }
+
 }
