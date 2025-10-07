@@ -4,6 +4,7 @@ import com.example.english_exam.dto.request.NormalQuestionRequest;
 import com.example.english_exam.dto.request.QuestionRequest;
 import com.example.english_exam.dto.response.admin.NormalQuestionAdminResponse;
 import com.example.english_exam.dto.response.admin.QuestionAdminResponse;
+import com.example.english_exam.dto.response.user.QuestionResponse;
 import com.example.english_exam.models.Question;
 import com.example.english_exam.services.ExamAndTest.QuestionService;
 import org.springframework.http.ResponseEntity;
@@ -55,4 +56,19 @@ public class QuestionController {
         NormalQuestionAdminResponse response = questionService.createNormalQuestion(request);
         return ResponseEntity.ok(response);
     }
+
+    // ✅ Lấy danh sách câu hỏi theo examPartId (cho FE tạo đề)
+    @GetMapping("/by-part/{examPartId}")
+    public ResponseEntity<List<QuestionResponse>> getQuestionsByPart(@PathVariable Long examPartId) {
+        List<QuestionResponse> list = questionService.getQuestionsByPart(examPartId);
+        return ResponseEntity.ok(list);
+    }
+
+    @GetMapping("/count/by-part/{examPartId}")
+    public ResponseEntity<Long> countQuestionsByPart(@PathVariable Long examPartId) {
+        long count = questionService.countByExamPartId(examPartId);
+        return ResponseEntity.ok(count);
+    }
+
+
 }

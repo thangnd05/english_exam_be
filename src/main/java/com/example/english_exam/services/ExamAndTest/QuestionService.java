@@ -5,6 +5,8 @@ import com.example.english_exam.dto.response.*;
 import com.example.english_exam.dto.response.admin.AnswerAdminResponse;
 import com.example.english_exam.dto.response.admin.NormalQuestionAdminResponse;
 import com.example.english_exam.dto.response.admin.QuestionAdminResponse;
+import com.example.english_exam.dto.response.user.AnswerResponse;
+import com.example.english_exam.dto.response.user.QuestionResponse;
 import com.example.english_exam.models.*;
 import com.example.english_exam.repositories.*;
 import com.example.english_exam.services.ApiExtend.GeminiService;
@@ -141,6 +143,31 @@ public class QuestionService {
         );
     }
 
+    public List<QuestionResponse> getQuestionsByPart(Long examPartId) {
+        List<Question> questions = questionRepository.findByExamPartId(examPartId);
+
+        List<QuestionResponse> responses = new ArrayList<>();
+        for (Question q : questions) {
+            QuestionResponse dto = new QuestionResponse();
+            dto.setQuestionId(q.getQuestionId());
+            dto.setExamPartId(q.getExamPartId());
+            dto.setQuestionText(q.getQuestionText());
+            dto.setQuestionType(q.getQuestionType());
+            dto.setExplanation(q.getExplanation());
+
+            List<Answer> answers = answerRepository.findByQuestionId(q.getQuestionId());
+            List<AnswerResponse> answerDtos = answers.stream()
+                    .map(a -> new AnswerResponse(a.getAnswerId(), a.getAnswerText(), a.getAnswerLabel()))
+                    .collect(Collectors.toList());
+
+            dto.setAnswers(answerDtos);
+            responses.add(dto);
+        }
+
+        return responses;
+    }
+
+
     public void deleteById(Long id) {
         questionRepository.deleteById(id);
     }
@@ -232,5 +259,9 @@ public class QuestionService {
                 passageResponse,
                 answerResponses
         );
+    }
+
+    public long countByExamPartId(Long examPartId) {
+        return questionRepository.countByExamPartId(examPartId);
     }
 }

@@ -16,6 +16,7 @@ import com.example.english_exam.repositories.*;
 import com.example.english_exam.security.JwtService;
 import jakarta.transaction.Transactional;
 import lombok.AllArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -41,6 +42,100 @@ public class TestService {
     private final AnswerRepository answerRepository;
     private final JwtService jwtService;
 
+
+
+    @Transactional
+    public TestResponse createTestFromQuestionBank(CreateTestRequest request, MultipartFile bannerFile) throws IOException {
+        // === 1. Tạo Test chính ===
+        Test test = new Test();
+        test.setTitle(request.getTitle());
+        test.setDescription(request.getDescription());
+        test.setExamTypeId(request.getExamTypeId());
+        test.setCreatedBy(request.getCreateBy());
+        test.setDurationMinutes(request.getDurationMinutes());
+        test.setCreatedAt(LocalDateTime.now());
+        test.setAvailableFrom(parseDate(request.getAvailableFrom()));
+        test.setAvailableTo(parseDate(request.getAvailableTo()));
+        test.setMaxAttempts(request.getMaxAttempts());
+
+        if (bannerFile != null && !bannerFile.isEmpty()) {
+            String url = cloudinaryService.uploadImage(bannerFile);
+            test.setBannerUrl(url);
+        }
+
+        testRepository.save(test);
+
+        // === 2. Tạo các phần của bài thi ===
+        for (PartRequest partReq : request.getParts()) {
+            if (partReq.getExamPartId() == null) continue;
+
+            // 🧩 Tạo TestPart mới
+            TestPart testPart = new TestPart();
+            testPart.setTestId(test.getTestId());
+            testPart.setExamPartId(partReq.getExamPartId());
+
+            // ✅ numQuestions không null
+            int numQs = 0;
+            if (Boolean.TRUE.equals(partReq.isRandom())) {
+                numQs = partReq.getNumQuestions() != null ? partReq.getNumQuestions() : 0;
+            } else if (partReq.getQuestionIds() != null) {
+                numQs = partReq.getQuestionIds().size();
+            }
+            testPart.setNumQuestions(numQs);
+            testPartRepository.save(testPart);
+
+            // === 3. Random hoặc chọn thủ công câu hỏi ===
+            if (partReq.isRandom()) {
+                if (numQs <= 0) continue;
+
+                // 🧠 Random 1 câu để kiểm tra xem có passage không
+                Question anyQ = questionRepository.findOneRandomQuestion(partReq.getExamPartId());
+                if (anyQ == null) continue;
+
+                if (anyQ.getPassageId() != null) {
+                    // Nếu có passage → lấy toàn bộ câu hỏi thuộc passage đó
+                    List<Question> group = questionRepository.findByPassageId(anyQ.getPassageId());
+                    for (Question q : group) {
+                        TestQuestion tq = new TestQuestion();
+                        tq.setTestPartId(testPart.getTestPartId());
+                        tq.setQuestionId(q.getQuestionId());
+                        testQuestionRepository.save(tq);
+                    }
+                } else {
+                    // Nếu không có passage → random độc lập
+                    List<Question> randomQuestions = questionRepository.findRandomQuestionsByExamPartId(
+                            partReq.getExamPartId(),
+                            PageRequest.of(0, numQs)
+                    );
+
+                    for (Question q : randomQuestions) {
+                        TestQuestion tq = new TestQuestion();
+                        tq.setTestPartId(testPart.getTestPartId());
+                        tq.setQuestionId(q.getQuestionId());
+                        testQuestionRepository.save(tq);
+                    }
+                }
+            } else {
+                // 🔹 Chọn thủ công từ danh sách questionIds
+                if (partReq.getQuestionIds() != null && !partReq.getQuestionIds().isEmpty()) {
+                    for (Long qid : partReq.getQuestionIds()) {
+                        TestQuestion tq = new TestQuestion();
+                        tq.setTestPartId(testPart.getTestPartId());
+                        tq.setQuestionId(qid);
+                        testQuestionRepository.save(tq);
+                    }
+                }
+            }
+        }
+
+        return new TestResponse(test);
+    }
+
+
+
+    private LocalDateTime parseDate(String input) {
+        return (input == null || input.isEmpty()) ? null : LocalDateTime.parse(input);
+    }
 
 
 

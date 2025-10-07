@@ -1,5 +1,6 @@
 package com.example.english_exam.controllers;
 
+import com.example.english_exam.dto.request.CreateTestRequest;
 import com.example.english_exam.dto.request.CreateTestWithQuestionsRequest;
 import com.example.english_exam.dto.request.TestRequest;
 import com.example.english_exam.dto.response.admin.TestAdminResponse;
@@ -81,15 +82,16 @@ public class TestController {
     // Tạo test mới
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<TestResponse> createTest(
+    public ResponseEntity<TestResponse> createTestFromQuestionBank(
             @RequestParam("data") String dataJson,
             @RequestPart(value = "banner", required = false) MultipartFile bannerFile
     ) throws IOException {
 
-        // 3. DÙNG ObjectMapper đã được inject, KHÔNG tạo mới
-        TestRequest request = this.objectMapper.readValue(dataJson, TestRequest.class);
+        // ✅ Parse JSON sang DTO
+        CreateTestRequest request = objectMapper.readValue(dataJson, CreateTestRequest.class);
+        // ✅ Gọi service
+        TestResponse response = testService.createTestFromQuestionBank(request, bannerFile);
 
-        TestResponse response = testService.createTest(request, bannerFile);
         return ResponseEntity.ok(response);
     }
 
