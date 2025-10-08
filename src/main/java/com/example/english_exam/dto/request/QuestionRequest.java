@@ -9,6 +9,8 @@ import java.util.List;
 
 @Setter
 @Getter
+@AllArgsConstructor
+@NoArgsConstructor
 public class QuestionRequest {
     private Long examPartId;
     private PassageRequest passage;
@@ -16,13 +18,4 @@ public class QuestionRequest {
     private Question.QuestionType questionType;
     private List<AnswerRequest> answers;
     private Long testPartId;
-
-    public QuestionRequest(Long examPartId, PassageRequest passage, String questionText, Question.QuestionType questionType, List<AnswerRequest> answers, Long testPartId) {
-        this.examPartId = examPartId;
-        this.passage = passage;
-        this.questionText = questionText;
-        this.questionType = questionType;
-        this.answers = answers;
-        this.testPartId = testPartId;
-    }
 }

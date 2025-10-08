@@ -9,6 +9,7 @@ import com.example.english_exam.dto.response.user.QuestionResponse;
 import com.example.english_exam.models.Question;
 import com.example.english_exam.services.ExamAndTest.QuestionService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.AllArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -24,9 +25,9 @@ import java.util.Optional;
 @AllArgsConstructor
 public class QuestionController {
     private final QuestionService questionService;
-    private final ObjectMapper objectMapper; // <-- 1. Khai báo một field final
+    private final ObjectMapper objectMapper;
 
-
+    // =================== GET ===================
 
     @GetMapping
     public ResponseEntity<List<Question>> getAllQuestions() {
@@ -40,55 +41,6 @@ public class QuestionController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    @PostMapping(
-            value = "/create-with-passage",
-            consumes = MediaType.MULTIPART_FORM_DATA_VALUE
-    )
-    public ResponseEntity<?> createQuestionsWithPassage(
-            @RequestParam("data") String dataJson,
-            @RequestPart(value = "audioFile", required = false) MultipartFile audioFile
-    ) {
-        try {
-            CreateQuestionsWithPassageRequest request =
-                    objectMapper.readValue(dataJson, CreateQuestionsWithPassageRequest.class);
-
-            List<QuestionAdminResponse> responses =
-                    questionService.createQuestionsWithPassage(request, audioFile);
-
-            return ResponseEntity.ok(responses);
-        } catch (Exception e) {
-            e.printStackTrace();
-            return ResponseEntity
-                    .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("❌ Error: " + e.getMessage());
-        }
-    }
-
-
-    @PostMapping
-    public ResponseEntity<QuestionAdminResponse> createQuestionWithAnswers(
-            @RequestBody QuestionRequest request) {
-
-        QuestionAdminResponse response = questionService.createQuestionWithAnswersAdmin(request);
-        return ResponseEntity.ok(response);
-    }
-
-
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteQuestion(@PathVariable Long id) {
-        questionService.deleteById(id);
-        return ResponseEntity.noContent().build();
-    }
-
-    @PostMapping("/normal")
-    public ResponseEntity<NormalQuestionAdminResponse> createNormalQuestion(
-            @RequestBody NormalQuestionRequest request) {
-
-        NormalQuestionAdminResponse response = questionService.createNormalQuestion(request);
-        return ResponseEntity.ok(response);
-    }
-
-    // ✅ Lấy danh sách câu hỏi theo examPartId (cho FE tạo đề)
     @GetMapping("/by-part/{examPartId}")
     public ResponseEntity<List<QuestionResponse>> getQuestionsByPart(@PathVariable Long examPartId) {
         List<QuestionResponse> list = questionService.getQuestionsByPart(examPartId);
@@ -101,5 +53,56 @@ public class QuestionController {
         return ResponseEntity.ok(count);
     }
 
+    // =================== CREATE ===================
 
+    /**
+     * 🧩 Tạo câu hỏi có Passage (Listening/Reading)
+     * Nhận JSON + audioFile
+     */
+    @PostMapping(
+            value = "/create-with-passage",
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE
+    )
+    public ResponseEntity<?> createQuestionsWithPassage(
+            @RequestParam("data") String dataJson,
+            @RequestPart(value = "audioFile", required = false) MultipartFile audioFile,
+            HttpServletRequest httpRequest // 🆕 lấy token từ cookie/header
+    ) {
+        try {
+            CreateQuestionsWithPassageRequest request =
+                    objectMapper.readValue(dataJson, CreateQuestionsWithPassageRequest.class);
+
+            List<QuestionAdminResponse> responses =
+                    questionService.createQuestionsWithPassage(request, audioFile, httpRequest); // 🆕 truyền request
+
+            return ResponseEntity.ok(responses);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity
+                    .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("❌ Error: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 🧩 Tạo một câu hỏi đơn có thể kèm Passage
+     */
+    @PostMapping
+    public ResponseEntity<QuestionAdminResponse> createQuestionWithAnswers(
+            @RequestBody QuestionRequest request,
+            HttpServletRequest httpRequest // 🆕 lấy userId từ token
+    ) {
+        QuestionAdminResponse response =
+                questionService.createQuestionWithAnswersAdmin(request, httpRequest); // 🆕 truyền request
+        return ResponseEntity.ok(response);
+    }
+
+
+    // =================== DELETE ===================
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteQuestion(@PathVariable Long id) {
+        questionService.deleteById(id);
+        return ResponseEntity.noContent().build();
+    }
 }

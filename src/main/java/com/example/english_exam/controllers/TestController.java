@@ -6,8 +6,11 @@ import com.example.english_exam.dto.request.TestRequest;
 import com.example.english_exam.dto.response.admin.TestAdminResponse;
 import com.example.english_exam.dto.response.user.TestResponse;
 import com.example.english_exam.models.Test;
+import com.example.english_exam.security.AuthService;
 import com.example.english_exam.services.ExamAndTest.TestService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.http.HttpServletRequest;
+import lombok.AllArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -23,16 +26,14 @@ import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/tests")
+@AllArgsConstructor
 public class TestController {
 
     private final TestService testService;
     private final ObjectMapper objectMapper; // <-- 1. Khai báo một field final
+    private final AuthService  authService;
 
 
-    public TestController(TestService testService, ObjectMapper objectMapper) {
-        this.testService = testService;
-        this.objectMapper = objectMapper;
-    }
 
     // Lấy tất cả tests
     @GetMapping
@@ -51,25 +52,25 @@ public class TestController {
     @GetMapping("/usertest/{testId}")
     public ResponseEntity<TestResponse> getUserTest(
             @PathVariable Long testId,
-            @RequestParam Long userId
+            HttpServletRequest httpRequest
     ) {
         try {
-            // Gọi service, truyền cả userId để tính attempts, remaining...
-            TestResponse response = testService.getTestFullById(testId, userId);
+            // ✅ Gọi service: userId tự lấy từ token bên trong service
+            TestResponse response = testService.getTestFullById(testId, httpRequest);
 
             if (response == null) {
                 return ResponseEntity.notFound().build();
             }
 
             return ResponseEntity.ok(response);
+
         } catch (RuntimeException e) {
-            // Ví dụ test không tồn tại
-            return ResponseEntity.status(404).body(null);
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
         } catch (Exception e) {
-            // Lỗi khác
-            return ResponseEntity.status(500).body(null);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
         }
     }
+
 
 
     @GetMapping("/admintest/{testId}")
@@ -84,13 +85,14 @@ public class TestController {
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<TestResponse> createTestFromQuestionBank(
             @RequestParam("data") String dataJson,
-            @RequestPart(value = "banner", required = false) MultipartFile bannerFile
+            @RequestPart(value = "banner", required = false) MultipartFile bannerFile,
+            HttpServletRequest httpRequest
     ) throws IOException {
 
         // ✅ Parse JSON sang DTO
         CreateTestRequest request = objectMapper.readValue(dataJson, CreateTestRequest.class);
         // ✅ Gọi service
-        TestResponse response = testService.createTestFromQuestionBank(request, bannerFile);
+        TestResponse response = testService.createTestFromQuestionBank(request, bannerFile,httpRequest);
 
         return ResponseEntity.ok(response);
     }
@@ -166,34 +168,44 @@ Bước 4: .toList() - Chuyển stream kết quả thành List
     @GetMapping("/user/by-exam-type/{examTypeId}")
     public ResponseEntity<List<TestResponse>> getTestsByExamType(
             @PathVariable Long examTypeId,
-            // Dùng Optional<> để biến userId thành không bắt buộc
-            @RequestParam Optional<Long> userId
+            HttpServletRequest httpRequest
     ) {
-        // 1. Lấy danh sách bài thi gốc
-        List<Test> tests = testService.getAllTestsByAdmin()
-                .stream()
-                .filter(t -> t.getExamTypeId().equals(examTypeId))
-                .toList();
+        try {
+            // ✅ 1. Lấy userId từ token (nếu có)
+            Long currentUserId = null;
+            try {
+                currentUserId = authService.getCurrentUserId(httpRequest);
+            } catch (Exception ignored) {
+                // Nếu token không hợp lệ hoặc không có token, coi như người dùng chưa đăng nhập
+            }
 
-        List<TestResponse> responses;
+            // ✅ 2. Lấy danh sách bài thi theo examType
+            List<Test> tests = testService.getAllTestsByAdmin()
+                    .stream()
+                    .filter(t -> t.getExamTypeId().equals(examTypeId))
+                    .toList();
 
-        // 2. Kiểm tra xem userId có tồn tại không
-        if (userId.isPresent()) {
-            // Nếu CÓ userId, lấy thông tin đầy đủ
-            Long currentUserId = userId.get();
-            responses = tests.stream()
-                    .map(test -> testService.getTestFullById(test.getTestId(), currentUserId))
-                    .toList();
-        } else {
-            // Nếu KHÔNG có userId, chỉ lấy thông tin công khai
-            // (Bạn cần có một cách để chuyển Test -> TestResponse mà không cần userId)
-            responses = tests.stream()
-                    .map(test -> new TestResponse(test)) // Giả sử bạn có constructor này
-                    .toList();
+            List<TestResponse> responses;
+
+            // ✅ 3. Nếu có userId → gọi service đầy đủ
+            if (currentUserId != null) {
+                responses = tests.stream()
+                        .map(test -> testService.getTestFullById(test.getTestId(), httpRequest))
+                        .toList();
+            } else {
+                // Nếu không có userId → trả bản rút gọn (public)
+                responses = tests.stream()
+                        .map(TestResponse::new) // constructor đơn giản chỉ map Test entity
+                        .toList();
+            }
+
+            return ResponseEntity.ok(responses);
+
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
         }
-
-        return ResponseEntity.ok(responses);
     }
+
 
 
 
@@ -216,24 +228,25 @@ Bước 4: .toList() - Chuyển stream kết quả thành List
 
     @PostMapping(path = "/create-with-questions", consumes = "multipart/form-data")
     public ResponseEntity<?> createTestWithNewQuestions(
-            // ✅ JSON test data
             @RequestParam("testData") String testDataJson,
-
-            // ✅ File banner (tùy chọn)
             @RequestPart(value = "bannerFile", required = false) MultipartFile bannerFile,
-
-            // ✅ Nhiều file audio (tùy chọn)
-            @RequestPart(value = "audioFiles", required = false) List<MultipartFile> audioFiles
+            @RequestPart(value = "audioFiles", required = false) List<MultipartFile> audioFiles,
+            HttpServletRequest httpRequest // 🆕 thêm dòng này để lấy token từ cookie
     ) {
         try {
-            // ✅ Chuyển JSON string → DTO
+            // ✅ Parse JSON thành DTO
             CreateTestWithQuestionsRequest request = objectMapper.readValue(
                     testDataJson,
                     CreateTestWithQuestionsRequest.class
             );
 
-            // ✅ Gọi service (truyền list audioFile)
-            TestResponse newTest = testService.createTestWithNewQuestions(request, bannerFile, audioFiles);
+            // ✅ Gọi service và truyền request kèm HttpServletRequest
+            TestResponse newTest = testService.createTestWithNewQuestions(
+                    request,
+                    bannerFile,
+                    audioFiles,
+                    httpRequest // 🆕 truyền vào để service lấy userId
+            );
 
             return ResponseEntity.status(HttpStatus.CREATED).body(newTest);
 

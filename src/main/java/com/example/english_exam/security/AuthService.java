@@ -9,6 +9,7 @@ import com.example.english_exam.repositories.RoleRepository;
 import com.example.english_exam.repositories.UserRepository;
 import com.example.english_exam.config.CustomUserDetailsService;
 import io.jsonwebtoken.Claims;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -188,5 +189,39 @@ public class AuthService {
 
         return Map.of("message", "Đăng ký thành công");
     }
+
+    public Long getCurrentUserId(HttpServletRequest request) {
+        String token = null;
+
+        // Ưu tiên lấy token từ Authorization header
+        String authHeader = request.getHeader("Authorization");
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            token = authHeader.substring(7);
+        } else if (request.getCookies() != null) {
+            for (var cookie : request.getCookies()) {
+                if ("accessToken".equals(cookie.getName())) {
+                    token = java.net.URLDecoder.decode(cookie.getValue(), java.nio.charset.StandardCharsets.UTF_8);
+                    break;
+                }
+            }
+        }
+
+        if (token == null || token.isEmpty()) {
+            return null;
+        }
+
+        try {
+            Claims claims = jwtService.extractAllClaims(token);
+            Object userIdObj = claims.get("userId");
+            if (userIdObj != null) {
+                return Long.parseLong(userIdObj.toString());
+            }
+        } catch (Exception e) {
+            System.out.println("⚠️ Token không hợp lệ hoặc hết hạn: " + e.getMessage());
+        }
+
+        return null;
+    }
+
 
 }

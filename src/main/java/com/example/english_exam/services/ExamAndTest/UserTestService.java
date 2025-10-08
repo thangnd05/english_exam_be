@@ -228,12 +228,14 @@ public class UserTestService {
         Test test = testRepository.findById(testId)
                 .orElseThrow(() -> new RuntimeException("Test not found with id: " + testId));
 
+        // ✅ Kiểm tra xem user đã có bài thi đang làm dở chưa
         Optional<UserTest> existing = userTestRepository.findActiveUserTest(userId, testId, UserTest.Status.IN_PROGRESS);
         if (existing.isPresent()) {
             log.info("✅ Reusing existing UserTest for user {} test {}", userId, testId);
             return existing.get();
         }
 
+        // ✅ Tạo mới user_test
         UserTest newTest = new UserTest();
         newTest.setUserId(userId);
         newTest.setTestId(testId);
@@ -244,6 +246,7 @@ public class UserTestService {
         log.info("🆕 Created new UserTest for user {} test {}", userId, testId);
         return userTestRepository.save(newTest);
     }
+
 
     public Optional<UserTest> findActiveUserTest(Long userId, Long testId) {
         return userTestRepository.findActiveUserTest(userId, testId, UserTest.Status.IN_PROGRESS);
@@ -277,6 +280,7 @@ public class UserTestService {
                 .status(ut.getStatus().name())
                 .build();
     }
+
 
 
 

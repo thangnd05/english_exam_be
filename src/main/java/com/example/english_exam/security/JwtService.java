@@ -77,7 +77,7 @@ public class JwtService {
     }
 
     // Trích xuất tất cả claims
-    private Claims extractAllClaims(String token) {
+    public Claims extractAllClaims(String token) {
         try {
             return Jwts.parserBuilder()
                     .setSigningKey(cachedSigningKey)

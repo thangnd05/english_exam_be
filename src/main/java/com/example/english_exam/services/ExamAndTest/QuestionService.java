@@ -10,7 +10,9 @@ import com.example.english_exam.dto.response.user.AnswerResponse;
 import com.example.english_exam.dto.response.user.QuestionResponse;
 import com.example.english_exam.models.*;
 import com.example.english_exam.repositories.*;
+import com.example.english_exam.security.AuthService;
 import com.example.english_exam.services.ApiExtend.GeminiService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.transaction.Transactional;
 import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -32,6 +34,8 @@ public class QuestionService {
     private final PassageRepository  passageRepository;
     private final ExamPartRepository examPartRepository;
     private final CloudinaryService  cloudinaryService;
+    private final AuthService authService;
+
 
 
     public List<Question> findAll() {
@@ -47,7 +51,12 @@ public class QuestionService {
     }
 
     @Transactional // ✅ Bọc toàn bộ phương thức trong một giao dịch
-    public QuestionAdminResponse createQuestionWithAnswersAdmin(QuestionRequest request) {
+    public QuestionAdminResponse createQuestionWithAnswersAdmin(QuestionRequest request, HttpServletRequest httpRequest) {
+
+        Long currentUserId = authService.getCurrentUserId(httpRequest);
+        if (currentUserId == null) {
+            throw new RuntimeException("Không xác định được người dùng từ token!");
+        }
 
         Passage passageContext = null;
         Long passageId = null;
@@ -69,6 +78,7 @@ public class QuestionService {
         question.setPassageId(passageId); // Sử dụng ID vừa tạo hoặc null
         question.setQuestionText(request.getQuestionText());
         question.setQuestionType(request.getQuestionType());
+        question.setCreatedBy(currentUserId); // 🆕 thêm dòng này
         question = questionRepository.save(question);
 
         // 3. Chuẩn bị và tạo Answers
@@ -175,107 +185,18 @@ public class QuestionService {
     public void deleteById(Long id) {
         questionRepository.deleteById(id);
     }
-
-    @Transactional // ✅ Bọc toàn bộ phương thức trong một giao dịch để đảm bảo an toàn
-    public NormalQuestionAdminResponse createNormalQuestion(NormalQuestionRequest request) {
-
-        Long passageId = null;
-        Passage passageContext = null;
-
-        // ✅ 1. Kiểm tra và tạo Passage trước (nếu có trong request)
-        if (request.getPassage() != null) {
-            Passage newPassage = new Passage();
-            newPassage.setContent(request.getPassage().getContent());
-            newPassage.setMediaUrl(request.getPassage().getMediaUrl());
-            newPassage.setPassageType(request.getPassage().getPassageType());
-
-            passageContext = passageRepository.save(newPassage); // Lưu và giữ lại đối tượng
-            passageId = passageContext.getPassageId();
-        }
-
-        // 2. Tạo Question với passageId vừa có (hoặc null)
-        ExamPart examPart = examPartRepository.findByName("Default");
-        Question question = new Question();
-        question.setExamPartId(examPart.getExamPartId());
-        question.setPassageId(passageId); // Sử dụng ID vừa tạo hoặc null
-        question.setQuestionText(request.getQuestionText());
-        question.setQuestionType(request.getQuestionType());
-        question = questionRepository.save(question);
-
-        // 3. Tạo Answers (đã tối ưu hóa)
-        List<Answer> answerEntities = new ArrayList<>();
-        if (request.getAnswers() != null && !request.getAnswers().isEmpty()) {
-            List<Answer> answersToSave = new ArrayList<>();
-            switch (question.getQuestionType()) {
-                case MCQ:
-                    for (AnswerRequest ar : request.getAnswers()) {
-                        Answer ans = new Answer();
-                        ans.setQuestionId(question.getQuestionId());
-                        ans.setAnswerText(ar.getAnswerText());
-                        ans.setIsCorrect(ar.getIsCorrect());
-                        ans.setAnswerLabel(ar.getLabel());
-                        answersToSave.add(ans);
-                    }
-                    break;
-                case FILL_BLANK:
-                    AnswerRequest ar = request.getAnswers().get(0);
-                    Answer ans = new Answer();
-                    ans.setQuestionId(question.getQuestionId());
-                    ans.setAnswerText(ar.getAnswerText());
-                    ans.setIsCorrect(true);
-                    ans.setAnswerLabel(ar.getLabel() != null ? ar.getLabel() : "");
-                    answersToSave.add(ans);
-                    break;
-                case ESSAY:
-                    // không cần answer
-                    break;
-            }
-            // ✅ Tối ưu hóa: Dùng saveAll để lưu tất cả trong 1 lần gọi DB
-            if (!answersToSave.isEmpty()) {
-                answerEntities = answerRepository.saveAll(answersToSave);
-            }
-        }
-
-        // 4. Build PassageResponse từ đối tượng đã có, không cần query lại
-        PassageResponse passageResponse = null;
-        if (passageContext != null) {
-            passageResponse = new PassageResponse(
-                    passageContext.getPassageId(),
-                    passageContext.getContent(),
-                    passageContext.getMediaUrl(),
-                    passageContext.getPassageType().name()
-            );
-        }
-
-        // 5. Convert answers sang DTO
-        List<AnswerAdminResponse> answerResponses = answerEntities.stream()
-                .map(a -> new AnswerAdminResponse(
-                        a.getAnswerId(), a.getAnswerText(), a.getIsCorrect(), a.getAnswerLabel()
-                ))
-                .collect(Collectors.toList());
-
-        // 6. Trả về DTO
-        return new NormalQuestionAdminResponse(
-                question.getQuestionId(),
-                question.getExamPartId(),
-                question.getQuestionText(),
-                question.getQuestionType(),
-                passageResponse,
-                answerResponses
-        );
-    }
-
     public long countByExamPartId(Long examPartId) {
         return questionRepository.countByExamPartId(examPartId);
     }
 
 
     @Transactional
-    public List<QuestionAdminResponse> createQuestionsWithPassage(
-            CreateQuestionsWithPassageRequest request,
-            MultipartFile audioFile
-    ) throws IOException {
+    public List<QuestionAdminResponse> createQuestionsWithPassage(CreateQuestionsWithPassageRequest request,
+                                                                  MultipartFile audioFile,
+                                                                  HttpServletRequest httpRequest) throws IOException {
 
+
+        Long currentUserId = authService.getCurrentUserId(httpRequest);
         List<QuestionAdminResponse> responses = new ArrayList<>();
 
         // 1️⃣ Tạo Passage trước
@@ -299,6 +220,7 @@ public class QuestionService {
             question.setPassageId(passage.getPassageId());
             question.setQuestionText(qReq.getQuestionText());
             question.setQuestionType(qReq.getQuestionType());
+            question.setCreatedBy(currentUserId);
             question = questionRepository.save(question);
 
             // 3️⃣ Lưu đáp án

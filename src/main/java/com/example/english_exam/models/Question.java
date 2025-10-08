@@ -23,6 +23,9 @@ public class Question {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String questionText;
 
+    private Long createdBy;
+
+
     @Column(nullable = false)
     @Enumerated(EnumType.STRING)
     private QuestionType questionType;

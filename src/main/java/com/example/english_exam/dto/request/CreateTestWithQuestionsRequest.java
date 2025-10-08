@@ -10,7 +10,6 @@ public class CreateTestWithQuestionsRequest {
     private String title;
     private String description;
     private Long examTypeId;
-    private Long createBy;
     private Integer durationMinutes;
     private LocalDateTime availableFrom;
     private LocalDateTime availableTo;

@@ -2,7 +2,9 @@ package com.example.english_exam.controllers;
 
 import com.example.english_exam.dto.response.UserTestResponse;
 import com.example.english_exam.models.UserTest;
+import com.example.english_exam.security.AuthService;
 import com.example.english_exam.services.ExamAndTest.UserTestService;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.AllArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -15,6 +17,7 @@ import java.util.*;
 public class UserTestController {
 
     private final UserTestService userTestService;
+    private final AuthService authService;
 
     // ✅ Lấy tất cả user test
     @GetMapping
@@ -54,15 +57,22 @@ public class UserTestController {
 
     // ✅ Tạo hoặc bắt đầu bài test mới
     @PostMapping
-    public ResponseEntity<?> startUserTest(@RequestBody Map<String, Long> request) {
+    public ResponseEntity<?> startUserTest(@RequestBody Map<String, Long> request,
+                                           HttpServletRequest httpRequest) {
         try {
             Long testId = request.get("testId");
-            Long userId = request.get("userId"); // 🟢 giờ FE gửi trực tiếp userId luôn
 
-            if (testId == null || userId == null) {
-                return ResponseEntity.badRequest().body(Map.of("error", "Missing testId or userId"));
+            if (testId == null) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Missing testId"));
             }
 
+            // ✅ Lấy userId từ JWT token
+            Long userId = authService.getCurrentUserId(httpRequest);
+            if (userId == null) {
+                return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
+            }
+
+            // ✅ Tạo hoặc tái sử dụng UserTest
             UserTest userTest = userTestService.startUserTest(testId, userId);
 
             Map<String, Object> response = new HashMap<>();
@@ -71,6 +81,7 @@ public class UserTestController {
             response.put("status", userTest.getStatus() != null ? userTest.getStatus().name() : "UNKNOWN");
 
             return ResponseEntity.ok(response);
+
         } catch (Exception e) {
             e.printStackTrace();
             return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));

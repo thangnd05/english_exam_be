@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+
 import java.util.List;
 import java.util.Optional;
 
@@ -13,7 +14,7 @@ public interface UserTestRepository extends JpaRepository<UserTest, Long> {
     List<UserTest> findByUserId(Long userId);
     List<UserTest> findByTestId(Long testId);
 
-    int countByUserIdAndTestId(Long userId, Long testId);
+    int countByUserIdAndTestIdAndStatus(Long userId, Long testId, UserTest.Status status);
 
     @Query("SELECT ut FROM UserTest ut WHERE ut.userId = :userId AND ut.testId = :testId AND ut.status = :status")
     Optional<UserTest> findActiveUserTest(@Param("userId") Long userId,
@@ -23,5 +24,5 @@ public interface UserTestRepository extends JpaRepository<UserTest, Long> {
     List<UserTest> findByUserIdAndTestIdOrderByStartedAtDesc(Long userId, Long testId);
 
 
-
+    Optional<UserTest> findTopByUserIdAndTestIdOrderByStartedAtDesc(Long userId, Long testId);
 }
