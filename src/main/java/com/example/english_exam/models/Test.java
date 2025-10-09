@@ -45,6 +45,10 @@ public class Test {
     // Số lần làm bài cho phép (null = không giới hạn)
     private Integer maxAttempts;
 
+    @Column(name = "class_id")
+    private Long classId; // FK -> exam_parts
+
+
 
     // ✅ Method tính trạng thái thực tế
     public TestStatus calculateStatus() {
@@ -60,5 +64,6 @@ public class Test {
         }
         return TestStatus.OPEN;
     }
+
 
 }

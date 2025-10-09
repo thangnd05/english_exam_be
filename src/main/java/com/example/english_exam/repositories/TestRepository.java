@@ -14,14 +14,4 @@ import java.util.List;
 public interface TestRepository extends JpaRepository<Test, Long> {
 
     List<Test>findByCreatedBy(Long id);
-
-    public interface TestPartRepository extends JpaRepository<TestPart, Long> {
-        List<TestPart> findByTestId(Long testId);
-    }
-
-    @Repository
-    public interface TestQuestionRepository extends JpaRepository<TestQuestion, Long> {
-        List<TestQuestion> findByTestPartId(Long testPartId);
-    }
-
 }

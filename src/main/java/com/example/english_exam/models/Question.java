@@ -36,4 +36,7 @@ public class Question {
     public enum QuestionType {
         MCQ, FILL_BLANK, ESSAY
     }
+
+    @Column(name = "class_id")
+    private Long classId;
 }
