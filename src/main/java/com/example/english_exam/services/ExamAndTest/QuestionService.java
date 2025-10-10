@@ -79,6 +79,11 @@ public class QuestionService {
         question.setQuestionText(request.getQuestionText());
         question.setQuestionType(request.getQuestionType());
         question.setCreatedBy(currentUserId); // 🆕 thêm dòng này
+
+        // 🔹 Gắn classId nếu có (có thể null)
+        if (request.getClassId() != null) {
+            question.setClassId(request.getClassId());
+        }
         question = questionRepository.save(question);
 
         // 3. Chuẩn bị và tạo Answers
@@ -153,7 +158,8 @@ public class QuestionService {
                 question.getQuestionType(),
                 question.getExplanation(),
                 request.getTestPartId(),
-                answerAdminResponses
+                answerAdminResponses,
+                question.getClassId()
         );
     }
 
@@ -221,6 +227,10 @@ public class QuestionService {
             question.setQuestionText(qReq.getQuestionText());
             question.setQuestionType(qReq.getQuestionType());
             question.setCreatedBy(currentUserId);
+
+            if (request.getClassId() != null) {
+                question.setClassId(request.getClassId());
+            }
             question = questionRepository.save(question);
 
             // 3️⃣ Lưu đáp án
@@ -253,7 +263,8 @@ public class QuestionService {
                     question.getQuestionType(),
                     question.getExplanation(),
                     null,
-                    answerDtos
+                    answerDtos,
+                    question.getClassId()
             ));
         }
 

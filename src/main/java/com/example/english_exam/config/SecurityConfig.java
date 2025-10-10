@@ -48,6 +48,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/user-tests/**").permitAll()
                         .requestMatchers("/api/user-answers/**").permitAll()
                         .requestMatchers("/api/exam-types/**").permitAll()
+                        .requestMatchers("/api/classes/**").permitAll()
+
                         .requestMatchers("/uploads/**").permitAll() // <-- Vẫn cần thêm dòng này
                         .anyRequest().authenticated()
                 )

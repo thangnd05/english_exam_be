@@ -13,15 +13,10 @@ public class TestRequest {
     private String title;
     private String description;
     private Long examTypeId;
-    private Long createBy;          // createdBy
-    private Integer durationMinutes; // null = không giới hạn
-
-    // Thời gian mở bài (optional)
-    private LocalDateTime availableFrom;
-
-    private LocalDateTime availableTo;
-
+    private Integer durationMinutes;
+    private String availableFrom; // gửi dạng "2025-10-08T10:00"
+    private String availableTo;
     private Integer maxAttempts;
-
-    private List<PartRequest> parts;
+    private List<PartRequest> parts; // sử dụng DTO bạn đã có
+    private Long classId;
 }

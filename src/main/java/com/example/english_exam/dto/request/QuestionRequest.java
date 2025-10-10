@@ -18,4 +18,6 @@ public class QuestionRequest {
     private Question.QuestionType questionType;
     private List<AnswerRequest> answers;
     private Long testPartId;
+    private Long classId;
+
 }

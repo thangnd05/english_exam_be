@@ -1,5 +1,6 @@
 package com.example.english_exam.controllers;
 
+import com.example.english_exam.dto.response.ClassSimpleResponse;
 import com.example.english_exam.models.ClassEntity;
 import com.example.english_exam.services.ClassService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -32,13 +33,13 @@ public class ClassController {
     @GetMapping("/my")
     public ResponseEntity<?> getMyClasses(HttpServletRequest request) {
         try {
-            Long teacherId = classService.getCurrentTeacherId(request);
-            List<ClassEntity> classes = classService.getClassesByTeacher(teacherId);
-            return ResponseEntity.ok(classes);
+            List<ClassSimpleResponse> responses = classService.getMyClasses(request);
+            return ResponseEntity.ok(responses);
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
+
     // 🟢 Sửa thông tin lớp học
     @PutMapping("/{classId}")
     public ResponseEntity<?> updateClass(

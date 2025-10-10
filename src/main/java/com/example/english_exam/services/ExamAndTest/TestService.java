@@ -47,7 +47,7 @@ public class TestService {
 
 
     @Transactional
-    public TestResponse createTestFromQuestionBank(CreateTestRequest request,
+    public TestResponse createTestFromQuestionBank(TestRequest request,
                                                    MultipartFile bannerFile,
                                                    HttpServletRequest httpRequest) throws IOException {
         // === 1. Tạo Test chính ===
@@ -64,6 +64,11 @@ public class TestService {
         test.setAvailableFrom(parseDate(request.getAvailableFrom()));
         test.setAvailableTo(parseDate(request.getAvailableTo()));
         test.setMaxAttempts(request.getMaxAttempts());
+
+        // 🔹 Gắn classId nếu có (có thể null)
+        if (request.getClassId() != null) {
+            test.setClassId(request.getClassId());
+        }
 
         if (bannerFile != null && !bannerFile.isEmpty()) {
             String url = cloudinaryService.uploadImage(bannerFile);
@@ -159,126 +164,6 @@ public class TestService {
 
     public void deleteTest(Long id) {
         testRepository.deleteById(id);
-    }
-
-    @Transactional
-    public TestResponse createTest(TestRequest request, MultipartFile bannerFile) throws IOException {
-        // === PHẦN TẠO TEST CHÍNH ===
-        ExamType examType = examTypeRepository.findById(request.getExamTypeId())
-                .orElseThrow(() -> new RuntimeException("ExamType not found"));
-
-        Test test = new Test();
-        test.setTitle(request.getTitle());
-        test.setDescription(request.getDescription());
-        test.setExamTypeId(request.getExamTypeId());
-        test.setCreatedBy(request.getCreateBy());
-        test.setCreatedAt(LocalDateTime.now());
-        test.setDurationMinutes(request.getDurationMinutes() != null
-                ? request.getDurationMinutes()
-                : examType.getDurationMinutes());
-        test.setAvailableFrom(request.getAvailableFrom());
-        test.setAvailableTo(request.getAvailableTo());
-        test.setMaxAttempts(request.getMaxAttempts());
-
-        if (bannerFile != null && !bannerFile.isEmpty()) {
-            String url = cloudinaryService.uploadImage(bannerFile);
-            test.setBannerUrl(url);
-        }
-
-        test = testRepository.save(test);
-
-        List<TestPartResponse> partResponses = new ArrayList<>();
-
-        // === LẶP QUA CÁC PART ===
-        for (PartRequest partReq : request.getParts()) {
-            TestPart testPart = new TestPart();
-            testPart.setTestId(test.getTestId());
-            testPart.setExamPartId(partReq.getExamPartId());
-            testPart.setNumQuestions(partReq.getNumQuestions());
-            testPart = testPartRepository.save(testPart);
-
-            final Long testPartId = testPart.getTestPartId();
-
-
-            // Lấy các câu hỏi ngẫu nhiên cho part này (1 query)
-            List<Question> questions = questionRepository.findRandomByExamPart(
-                    partReq.getExamPartId(), partReq.getNumQuestions());
-
-            if (questions.isEmpty()) {
-                partResponses.add(new TestPartResponse(testPart.getTestPartId(), testPart.getExamPartId(), 0, null, Collections.emptyList()));
-                continue;
-            }
-
-            // --- BƯỚC 1: TỐI ƯU HÓA - LẤY DỮ LIỆU HÀNG LOẠT ---
-            List<Long> questionIds = questions.stream().map(Question::getQuestionId).toList();
-
-            List<TestQuestion> testQuestionsToSave = new ArrayList<>();
-            for (Long qId : questionIds) {
-                TestQuestion tq = new TestQuestion();
-                tq.setTestPartId(testPart.getTestPartId());
-                tq.setQuestionId(qId);
-                testQuestionsToSave.add(tq);
-            }
-            testQuestionRepository.saveAll(testQuestionsToSave);
-
-            Set<Long> passageIds = questions.stream().map(Question::getPassageId).filter(Objects::nonNull).collect(Collectors.toSet());
-            Map<Long, Passage> passageMap = passageRepository.findAllById(passageIds).stream()
-                    .collect(Collectors.toMap(Passage::getPassageId, p -> p));
-
-            Map<Long, List<AnswerResponse>> answersByQuestionId = answerService.getAnswersForMultipleQuestions(questionIds);
-
-            // --- BƯỚC 2: LẮP RÁP DỮ LIỆU ĐÃ LẤY ---
-
-            PassageResponse passageResponseForPart = questions.stream()
-                    .map(Question::getPassageId)
-                    .filter(Objects::nonNull)
-                    .findFirst()
-                    .map(passageMap::get)
-                    .map(p -> new PassageResponse(p.getPassageId(), p.getContent(), p.getMediaUrl(), p.getPassageType().name()))
-                    .orElse(null);
-
-            List<QuestionResponse> questionResponses = questions.stream().map(q -> {
-                List<AnswerResponse> answers = answersByQuestionId.getOrDefault(q.getQuestionId(), Collections.emptyList());
-
-                return new QuestionResponse(
-                        q.getQuestionId(),
-                        q.getExamPartId(),
-                        q.getQuestionText(),
-                        q.getQuestionType(),
-                        q.getExplanation(),
-                        testPartId,  // ✅ dùng biến final thay vì testPart
-                        answers
-                );
-            }).toList();
-
-
-            partResponses.add(new TestPartResponse(
-                    testPart.getTestPartId(),
-                    testPart.getExamPartId(),
-                    testPart.getNumQuestions(),
-                    passageResponseForPart,
-                    questionResponses
-            ));
-        }
-
-        // --- DÒNG RETURN HOÀN CHỈNH ---
-        return new TestResponse(
-                test.getTestId(),
-                test.getTitle(),
-                test.getDescription(),
-                test.getExamTypeId(),
-                test.getCreatedBy(),
-                test.getCreatedAt(),
-                test.getBannerUrl(),
-                test.getDurationMinutes(),
-                test.getAvailableFrom(),
-                test.getAvailableTo(),
-                test.calculateStatus().name(),
-                test.getMaxAttempts(),
-                0, // Mới tạo nên attemptsUsed = 0
-                test.getMaxAttempts(), // remainingAttempts = maxAttempts
-                partResponses
-        );
     }
 
 
@@ -470,7 +355,8 @@ public class TestService {
                     test.getAvailableTo(),
                     test.calculateStatus().name(),
                     test.getMaxAttempts(),
-                    Collections.emptyList()
+                    Collections.emptyList(),
+                    test.getClassId()   // ✅ thêm dòng này
             );
         }
 
@@ -523,7 +409,8 @@ public class TestService {
                 return new QuestionAdminResponse(
                         q.getQuestionId(), q.getExamPartId(), q.getQuestionText(),
                         q.getQuestionType(), q.getExplanation(), tp.getTestPartId(),
-                        answers
+                        answers,q.getClassId()  // ✅ thêm dòng này
+
                 );
             }).filter(Objects::nonNull).toList();
 
@@ -538,7 +425,7 @@ public class TestService {
                 test.getTestId(), test.getTitle(), test.getDescription(), test.getExamTypeId(),
                 test.getCreatedBy(), test.getCreatedAt(), test.getBannerUrl(), test.getDurationMinutes(),
                 test.getAvailableFrom(), test.getAvailableTo(), test.calculateStatus().name(),
-                test.getMaxAttempts(), partResponses
+                test.getMaxAttempts(), partResponses,test.getClassId()
         );
     }
 
@@ -599,6 +486,11 @@ public class TestService {
         test.setAvailableFrom(request.getAvailableFrom());
         test.setAvailableTo(request.getAvailableTo());
         test.setMaxAttempts(request.getMaxAttempts());
+
+        // 🔹 Gắn classId nếu có (có thể null)
+        if (request.getClassId() != null) {
+            test.setClassId(request.getClassId());
+        }
 
         if (bannerFile != null && !bannerFile.isEmpty()) {
             String url = cloudinaryService.uploadImage(bannerFile);

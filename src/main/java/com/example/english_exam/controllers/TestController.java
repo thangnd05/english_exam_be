@@ -1,6 +1,5 @@
 package com.example.english_exam.controllers;
 
-import com.example.english_exam.dto.request.CreateTestRequest;
 import com.example.english_exam.dto.request.CreateTestWithQuestionsRequest;
 import com.example.english_exam.dto.request.TestRequest;
 import com.example.english_exam.dto.response.admin.TestAdminResponse;
@@ -20,7 +19,6 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 @CrossOrigin(origins = "http://localhost:3000")
 
@@ -90,7 +88,7 @@ public class TestController {
     ) throws IOException {
 
         // ✅ Parse JSON sang DTO
-        CreateTestRequest request = objectMapper.readValue(dataJson, CreateTestRequest.class);
+        TestRequest request = objectMapper.readValue(dataJson, TestRequest.class);
         // ✅ Gọi service
         TestResponse response = testService.createTestFromQuestionBank(request, bannerFile,httpRequest);
 
@@ -121,19 +119,6 @@ public class TestController {
                 })
                 .orElseGet(() -> ResponseEntity.notFound().build()); // 404 Not Found
     }
-
-    @PostMapping(value = "/pratise", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public TestResponse createPracticeTest(
-            @RequestParam("data") String dataJson,
-            @RequestPart(value = "banner", required = false) MultipartFile bannerFile
-    ) throws IOException {
-        // parse JSON sang DTO
-        ObjectMapper mapper = new ObjectMapper();
-        TestRequest request = mapper.readValue(dataJson, TestRequest.class);
-
-        return testService.createTest(request, bannerFile);
-    }
-
 
     @GetMapping("/admin")
     public List<Test> getAllTestsByAdmin() {

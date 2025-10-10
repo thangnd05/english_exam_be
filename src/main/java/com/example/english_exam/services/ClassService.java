@@ -1,5 +1,6 @@
 package com.example.english_exam.services;
 
+import com.example.english_exam.dto.response.ClassSimpleResponse;
 import com.example.english_exam.models.ClassEntity;
 import com.example.english_exam.repositories.ClassRepository;
 import com.example.english_exam.security.AuthService;
@@ -46,6 +47,16 @@ public class ClassService {
     // 🟢 Lấy tất cả lớp của 1 giáo viên
     public List<ClassEntity> getClassesByTeacher(Long teacherId) {
         return classRepository.findByTeacherId(teacherId);
+    }
+
+    public List<ClassSimpleResponse> getMyClasses(HttpServletRequest request) {
+        Long teacherId = authService.getCurrentUserId(request);
+
+        List<ClassEntity> classes = classRepository.findByTeacherId(teacherId);
+
+        return classes.stream()
+                .map(c -> new ClassSimpleResponse(c.getClassId(), c.getClassName()))
+                .toList();
     }
 
     // 🟢 Lấy thông tin 1 lớp

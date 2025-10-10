@@ -14,7 +14,6 @@ public class CreateTestWithQuestionsRequest {
     private LocalDateTime availableFrom;
     private LocalDateTime availableTo;
     private Integer maxAttempts;
-
-    // Danh sách các phần của Test, mỗi phần chứa các câu hỏi cần tạo
     private List<PartWithQuestionsRequest> parts;
+    private Long classId;
 }

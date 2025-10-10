@@ -17,4 +17,6 @@ public class QuestionAdminResponse {
     private String explanation;
     private Long testPartId;
     private List<AnswerAdminResponse> answers;    // có isCorrect
+    private Long classId;
+
 }

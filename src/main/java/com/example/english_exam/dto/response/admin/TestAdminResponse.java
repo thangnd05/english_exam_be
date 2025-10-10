@@ -25,8 +25,7 @@ public class TestAdminResponse {
 
     private String status; // ✅ thêm status trả về FE
     private Integer maxAttempts;
-
-
-
     private List<TestPartAdminResponse> parts; // chứa QuestionAdminResponse
+    private Long classId; // ID lớp (có thể null nếu test chung)
+
 }
