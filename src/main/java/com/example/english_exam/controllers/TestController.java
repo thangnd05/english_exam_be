@@ -253,15 +253,16 @@ Bước 4: .toList() - Chuyển stream kết quả thành List
     }
 
     @GetMapping("/by-class/{classId}")
-    public ResponseEntity<?> getTestsByClass(@PathVariable Long classId) {
-            List<Test> tests = testService.getTestByClassId(classId);
-            if (tests.isEmpty()) {
-                return ResponseEntity.ok(Map.of(
-                        "message", "Không có bài test nào trong lớp có ID = " + classId
-                ));
-            }
-            return ResponseEntity.ok(tests);
+    public ResponseEntity<?> getTestsByClass(@PathVariable Long classId, HttpServletRequest request) {
+        List<Test> tests = testService.getTestByClassId(classId, request);
+
+        if (tests.isEmpty()) {
+            return ResponseEntity.ok(Map.of("message", "Không có bài test nào trong lớp này"));
+        }
+
+        return ResponseEntity.ok(tests.stream().map(TestResponse::new).toList());
     }
+
 
 
 

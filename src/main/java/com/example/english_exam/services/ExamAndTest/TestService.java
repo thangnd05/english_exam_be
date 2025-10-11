@@ -18,9 +18,10 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.transaction.Transactional;
 import lombok.AllArgsConstructor;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
@@ -44,6 +45,8 @@ public class TestService {
     private final AnswerRepository answerRepository;
     private final AuthUtils authUtils;
     private final UserTestService userTestService;
+    private final ClassRepository classRepository;
+    private final ClassMemberRepository classMemberRepository;
 
     @Transactional
     public TestResponse createTestFromQuestionBank(TestRequest request,
@@ -460,9 +463,25 @@ public class TestService {
         return result;
     }
 
-    public List<Test>getTestByClassId(Long classId) {
+    public List<Test> getTestByClassId(Long classId, HttpServletRequest request) {
+        // 🧩 Lấy user hiện tại từ token
+        Long currentUserId = authUtils.getUserId(request);
+        if (currentUserId == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "🔒 Bạn cần đăng nhập để xem bài kiểm tra.");
+        }
+
+        // 🧩 Kiểm tra quyền truy cập lớp
+        boolean isMember = classMemberRepository.existsByClassIdAndUserId(classId, currentUserId);
+        boolean isTeacher = classRepository.existsByClassIdAndTeacherId(classId, currentUserId);
+
+        if (!isMember && !isTeacher) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "❌ Bạn không có quyền xem bài kiểm tra của lớp này!");
+        }
+
+        // ✅ Nếu hợp lệ, trả danh sách bài kiểm tra
         return testRepository.findByClassId(classId);
     }
+
 
 
 
