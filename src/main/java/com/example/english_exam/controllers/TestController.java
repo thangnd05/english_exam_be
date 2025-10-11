@@ -7,6 +7,7 @@ import com.example.english_exam.dto.response.user.TestResponse;
 import com.example.english_exam.models.Test;
 import com.example.english_exam.security.AuthService;
 import com.example.english_exam.services.ExamAndTest.TestService;
+import com.example.english_exam.util.AuthUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.AllArgsConstructor;
@@ -29,7 +30,7 @@ public class TestController {
 
     private final TestService testService;
     private final ObjectMapper objectMapper; // <-- 1. Khai báo một field final
-    private final AuthService  authService;
+    private final AuthUtils authUtils;
 
 
 
@@ -159,37 +160,40 @@ Bước 4: .toList() - Chuyển stream kết quả thành List
             // ✅ 1. Lấy userId từ token (nếu có)
             Long currentUserId = null;
             try {
-                currentUserId = authService.getCurrentUserId(httpRequest);
+                currentUserId = authUtils.getUserId(httpRequest);;
             } catch (Exception ignored) {
                 // Nếu token không hợp lệ hoặc không có token, coi như người dùng chưa đăng nhập
             }
 
-            // ✅ 2. Lấy danh sách bài thi theo examType
+            // ✅ 2. Lấy danh sách bài thi theo examType và chỉ lấy test chưa thuộc class nào (classId = null)
             List<Test> tests = testService.getAllTestsByAdmin()
                     .stream()
                     .filter(t -> t.getExamTypeId().equals(examTypeId))
+                    .filter(t -> t.getClassId() == null) // 🟢 chỉ lấy test chưa gán lớp
                     .toList();
 
             List<TestResponse> responses;
 
-            // ✅ 3. Nếu có userId → gọi service đầy đủ
+            // ✅ 3. Nếu có userId → trả bản đầy đủ
             if (currentUserId != null) {
                 responses = tests.stream()
                         .map(test -> testService.getTestFullById(test.getTestId(), httpRequest))
                         .toList();
             } else {
-                // Nếu không có userId → trả bản rút gọn (public)
+                // ✅ Nếu chưa đăng nhập → trả bản rút gọn
                 responses = tests.stream()
-                        .map(TestResponse::new) // constructor đơn giản chỉ map Test entity
+                        .map(TestResponse::new)
                         .toList();
             }
 
             return ResponseEntity.ok(responses);
 
         } catch (Exception e) {
+            e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
         }
     }
+
 
 
 
@@ -246,6 +250,17 @@ Bước 4: .toList() - Chuyển stream kết quả thành List
                     .status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("❌ Error creating test: " + e.getMessage());
         }
+    }
+
+    @GetMapping("/by-class/{classId}")
+    public ResponseEntity<?> getTestsByClass(@PathVariable Long classId) {
+            List<Test> tests = testService.getTestByClassId(classId);
+            if (tests.isEmpty()) {
+                return ResponseEntity.ok(Map.of(
+                        "message", "Không có bài test nào trong lớp có ID = " + classId
+                ));
+            }
+            return ResponseEntity.ok(tests);
     }
 
 

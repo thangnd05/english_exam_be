@@ -4,8 +4,10 @@ import com.example.english_exam.dto.response.ClassSimpleResponse;
 import com.example.english_exam.models.ClassEntity;
 import com.example.english_exam.repositories.ClassRepository;
 import com.example.english_exam.security.AuthService;
+import com.example.english_exam.util.AuthUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,13 +19,16 @@ import java.util.concurrent.ThreadLocalRandom;
 public class ClassService {
 
     private final ClassRepository classRepository;
-    private final AuthService authService;
+    private final AuthUtils authUtils;
 
     // 🟢 Tạo lớp học mới (sinh ID ngẫu nhiên & gán teacherId từ token)
+    @PreAuthorize("!hasRole('USER')")
     @Transactional
     public ClassEntity createClass(ClassEntity classEntity, HttpServletRequest httpRequest) {
         // 🔹 Lấy userId hiện tại từ JWT
-        Long currentUserId = authService.getCurrentUserId(httpRequest);
+
+        Long currentUserId = authUtils.getUserId(httpRequest);
+
 
         // 🔹 Sinh ID ngẫu nhiên cho class (8 chữ số)
         long randomId;
@@ -50,7 +55,7 @@ public class ClassService {
     }
 
     public List<ClassSimpleResponse> getMyClasses(HttpServletRequest request) {
-        Long teacherId = authService.getCurrentUserId(request);
+        Long teacherId = authUtils.getUserId(request);
 
         List<ClassEntity> classes = classRepository.findByTeacherId(teacherId);
 
@@ -75,14 +80,13 @@ public class ClassService {
     }
 
     public Long getCurrentTeacherId(HttpServletRequest request) {
-        return authService.getCurrentUserId(request);
+        return authUtils.getUserId(request);
     }
 
     // 🟢 Cập nhật thông tin lớp học
     @Transactional
     public ClassEntity updateClass(Long classId, ClassEntity updated, HttpServletRequest request) {
-        Long currentUserId = authService.getCurrentUserId(request);
-
+        Long currentUserId = authUtils.getUserId(request);
         // Tìm lớp hiện tại
         ClassEntity existing = classRepository.findById(classId)
                 .orElseThrow(() -> new RuntimeException("Class not found with ID: " + classId));

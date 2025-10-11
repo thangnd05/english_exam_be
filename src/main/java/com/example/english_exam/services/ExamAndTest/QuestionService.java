@@ -12,6 +12,7 @@ import com.example.english_exam.models.*;
 import com.example.english_exam.repositories.*;
 import com.example.english_exam.security.AuthService;
 import com.example.english_exam.services.ApiExtend.GeminiService;
+import com.example.english_exam.util.AuthUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.transaction.Transactional;
 import lombok.AllArgsConstructor;
@@ -34,7 +35,7 @@ public class QuestionService {
     private final PassageRepository  passageRepository;
     private final ExamPartRepository examPartRepository;
     private final CloudinaryService  cloudinaryService;
-    private final AuthService authService;
+    private final AuthUtils authUtils;
 
 
 
@@ -53,7 +54,7 @@ public class QuestionService {
     @Transactional // ✅ Bọc toàn bộ phương thức trong một giao dịch
     public QuestionAdminResponse createQuestionWithAnswersAdmin(QuestionRequest request, HttpServletRequest httpRequest) {
 
-        Long currentUserId = authService.getCurrentUserId(httpRequest);
+        Long currentUserId = authUtils.getUserId(httpRequest);;
         if (currentUserId == null) {
             throw new RuntimeException("Không xác định được người dùng từ token!");
         }
@@ -202,7 +203,7 @@ public class QuestionService {
                                                                   HttpServletRequest httpRequest) throws IOException {
 
 
-        Long currentUserId = authService.getCurrentUserId(httpRequest);
+        Long currentUserId = authUtils.getUserId(httpRequest);
         List<QuestionAdminResponse> responses = new ArrayList<>();
 
         // 1️⃣ Tạo Passage trước

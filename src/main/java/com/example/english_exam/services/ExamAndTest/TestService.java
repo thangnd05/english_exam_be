@@ -13,11 +13,12 @@ import com.example.english_exam.dto.response.user.TestPartResponse;
 import com.example.english_exam.dto.response.user.TestResponse;
 import com.example.english_exam.models.*;
 import com.example.english_exam.repositories.*;
-import com.example.english_exam.security.AuthService;
+import com.example.english_exam.util.AuthUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.transaction.Transactional;
 import lombok.AllArgsConstructor;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -41,18 +42,15 @@ public class TestService {
     private final PassageRepository  passageRepository;
     private final UserTestRepository userTestRepository;
     private final AnswerRepository answerRepository;
-    private final AuthService  authService;
+    private final AuthUtils authUtils;
     private final UserTestService userTestService;
-
-
 
     @Transactional
     public TestResponse createTestFromQuestionBank(TestRequest request,
                                                    MultipartFile bannerFile,
                                                    HttpServletRequest httpRequest) throws IOException {
         // === 1. Tạo Test chính ===
-
-        Long currentUserId = authService.getCurrentUserId(httpRequest);
+        Long currentUserId = authUtils.getUserId(httpRequest);
 
         Test test = new Test();
         test.setTitle(request.getTitle());
@@ -188,7 +186,7 @@ public class TestService {
     @Transactional
     public TestResponse getTestFullById(Long testId, HttpServletRequest httpRequest) {
 
-        Long currentUserId = authService.getCurrentUserId(httpRequest);
+        Long currentUserId = authUtils.getUserId(httpRequest);
         if (currentUserId == null) {
             throw new RuntimeException("Không xác định được người dùng. Token không hợp lệ hoặc đã hết hạn.");
         }
@@ -462,6 +460,12 @@ public class TestService {
         return result;
     }
 
+    public List<Test>getTestByClassId(Long classId) {
+        return testRepository.findByClassId(classId);
+    }
+
+
+
 
     @Transactional
     public TestResponse createTestWithNewQuestions(CreateTestWithQuestionsRequest request,
@@ -470,7 +474,7 @@ public class TestService {
                                                    HttpServletRequest httpRequest) throws IOException {
 
 
-        Long currentUserId = authService.getCurrentUserId(httpRequest);
+        Long currentUserId = authUtils.getUserId(httpRequest);
 
         // === BƯỚC 1: TẠO TEST CHÍNH ===
         ExamType examType = examTypeRepository.findById(request.getExamTypeId())

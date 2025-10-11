@@ -4,6 +4,7 @@ import com.example.english_exam.dto.response.UserTestResponse;
 import com.example.english_exam.models.UserTest;
 import com.example.english_exam.security.AuthService;
 import com.example.english_exam.services.ExamAndTest.UserTestService;
+import com.example.english_exam.util.AuthUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.AllArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -17,7 +18,7 @@ import java.util.*;
 public class UserTestController {
 
     private final UserTestService userTestService;
-    private final AuthService authService;
+    private final AuthUtils authUtils;
 
     // ✅ Lấy tất cả user test
     @GetMapping
@@ -67,7 +68,7 @@ public class UserTestController {
             }
 
             // ✅ Lấy userId từ JWT token
-            Long userId = authService.getCurrentUserId(httpRequest);
+            Long userId = authUtils.getUserId(httpRequest);;
             if (userId == null) {
                 return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
             }

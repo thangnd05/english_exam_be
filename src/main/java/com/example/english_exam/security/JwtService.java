@@ -12,6 +12,8 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.function.Function;
 
@@ -122,28 +124,37 @@ public class JwtService {
         return null;
     }
 
-    // ✅ Trích xuất userId trực tiếp từ token trong cookie
-    public Long extractUserId(HttpServletRequest request) {
+    public Claims extractAllClaimsFromRequest(HttpServletRequest request) {
+        String token = null;
+
+        // Ưu tiên Authorization header
+        String authHeader = request.getHeader("Authorization");
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            token = authHeader.substring(7);
+        }
+        // Nếu không có thì lấy từ cookie
+        else if (request.getCookies() != null) {
+            for (var cookie : request.getCookies()) {
+                if ("accessToken".equals(cookie.getName())) {
+                    token = URLDecoder.decode(cookie.getValue(), StandardCharsets.UTF_8);
+                    break;
+                }
+            }
+        }
+
+        if (token == null || token.isEmpty()) {
+            throw new RuntimeException("❌ Token not found in request");
+        }
+
         try {
-            String token = resolveTokenFromCookie(request);
-            if (token == null) {
-                throw new RuntimeException("Token not found in cookies");
-            }
-
-            // Lấy username (thường là email)
-            String username = extractUsername(token);
-            if (username == null) {
-                throw new RuntimeException("Invalid token: no username");
-            }
-
-            // Tìm userId tương ứng trong DB
-            return userRepository.findByUserNameOrEmail(username, username)
-                    .map(u -> u.getUserId())
-                    .orElseThrow(() -> new RuntimeException("User not found"));
+            return extractAllClaims(token);
         } catch (Exception e) {
-            throw new RuntimeException("❌ Failed to extract userId from JWT: " + e.getMessage());
+            throw new RuntimeException("⚠️ Invalid or expired token: " + e.getMessage());
         }
     }
+
+
+
 
 
 }

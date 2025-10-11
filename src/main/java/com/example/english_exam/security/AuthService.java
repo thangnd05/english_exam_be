@@ -1,6 +1,7 @@
 // src/main/java/com/example/english_exam/services/AuthService.java
 package com.example.english_exam.security;
 
+import com.example.english_exam.dto.auth.UserTokenInfo;
 import com.example.english_exam.dto.request.RegisterRequest;
 import com.example.english_exam.dto.response.AuthResponse;
 import com.example.english_exam.models.Role;
@@ -190,38 +191,37 @@ public class AuthService {
         return Map.of("message", "Đăng ký thành công");
     }
 
-    public Long getCurrentUserId(HttpServletRequest request) {
-        String token = null;
 
-        // Ưu tiên lấy token từ Authorization header
-        String authHeader = request.getHeader("Authorization");
-        if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            token = authHeader.substring(7);
-        } else if (request.getCookies() != null) {
-            for (var cookie : request.getCookies()) {
-                if ("accessToken".equals(cookie.getName())) {
-                    token = java.net.URLDecoder.decode(cookie.getValue(), java.nio.charset.StandardCharsets.UTF_8);
-                    break;
-                }
-            }
-        }
-
-        if (token == null || token.isEmpty()) {
-            return null;
-        }
-
+    public UserTokenInfo getCurrentUserInfo(HttpServletRequest request) {
         try {
-            Claims claims = jwtService.extractAllClaims(token);
-            Object userIdObj = claims.get("userId");
-            if (userIdObj != null) {
-                return Long.parseLong(userIdObj.toString());
-            }
-        } catch (Exception e) {
-            System.out.println("⚠️ Token không hợp lệ hoặc hết hạn: " + e.getMessage());
-        }
+            Claims claims = jwtService.extractAllClaimsFromRequest(request);
+            Long userId = null;
+            Long roleId = null;
 
-        return null;
+            Object userIdObj = claims.get("userId");
+            Object roleIdObj = claims.get("roleId");
+
+            if (userIdObj != null)
+                userId = Long.parseLong(userIdObj.toString());
+            if (roleIdObj != null)
+                roleId = Long.parseLong(roleIdObj.toString());
+
+            // fallback nếu token thiếu thông tin
+            if (userId == null) {
+                String username = claims.getSubject();
+                var user = userRepository.findByUserNameOrEmail(username, username)
+                        .orElseThrow(() -> new RuntimeException("User not found"));
+                userId = user.getUserId();
+                roleId = user.getRoleId();
+            }
+
+            return new UserTokenInfo(userId, roleId);
+        } catch (Exception e) {
+            throw new RuntimeException("❌ Failed to extract user info: " + e.getMessage());
+        }
     }
+
+
 
 
 }
