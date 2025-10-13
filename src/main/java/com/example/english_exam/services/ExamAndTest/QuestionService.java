@@ -164,8 +164,15 @@ public class QuestionService {
         );
     }
 
-    public List<QuestionResponse> getQuestionsByPart(Long examPartId) {
-        List<Question> questions = questionRepository.findByExamPartId(examPartId);
+    public List<QuestionResponse> getQuestionsByPart(Long examPartId, Long classId) {
+        List<Question> questions;
+
+        // 🟢 Nếu có classId thì chỉ lấy câu hỏi trong lớp đó
+        if (classId != null) {
+            questions = questionRepository.findByExamPartIdAndClassId(examPartId, classId);
+        } else {
+            questions = questionRepository.findByExamPartId(examPartId);
+        }
 
         List<QuestionResponse> responses = new ArrayList<>();
         for (Question q : questions) {
@@ -189,12 +196,21 @@ public class QuestionService {
     }
 
 
+
     public void deleteById(Long id) {
         questionRepository.deleteById(id);
     }
-    public long countByExamPartId(Long examPartId) {
-        return questionRepository.countByExamPartId(examPartId);
+
+    public long countByExamPartId(Long examPartId, Long classId) {
+        if (classId != null) {
+            // 🟢 Đếm theo lớp nếu có
+            return questionRepository.countByExamPartIdAndClassId(examPartId, classId);
+        } else {
+            // 🟢 Không có lớp → đếm toàn bộ
+            return questionRepository.countByExamPartId(examPartId);
+        }
     }
+
 
 
     @Transactional

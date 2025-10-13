@@ -52,9 +52,11 @@ public class TestService {
     public TestResponse createTestFromQuestionBank(TestRequest request,
                                                    MultipartFile bannerFile,
                                                    HttpServletRequest httpRequest) throws IOException {
-        // === 1. Tạo Test chính ===
+
+        // === 1️⃣ Lấy thông tin người tạo ===
         Long currentUserId = authUtils.getUserId(httpRequest);
 
+        // === 2️⃣ Tạo Test chính ===
         Test test = new Test();
         test.setTitle(request.getTitle());
         test.setDescription(request.getDescription());
@@ -67,10 +69,12 @@ public class TestService {
         test.setMaxAttempts(request.getMaxAttempts());
 
         // 🔹 Gắn classId nếu có (có thể null)
-        if (request.getClassId() != null) {
-            test.setClassId(request.getClassId());
+        Long classId = request.getClassId();
+        if (classId != null) {
+            test.setClassId(classId);
         }
 
+        // 🔹 Upload banner nếu có
         if (bannerFile != null && !bannerFile.isEmpty()) {
             String url = cloudinaryService.uploadImage(bannerFile);
             test.setBannerUrl(url);
@@ -78,16 +82,15 @@ public class TestService {
 
         testRepository.save(test);
 
-        // === 2. Tạo các phần của bài thi ===
+        // === 3️⃣ Tạo các phần (Part) của bài thi ===
         for (PartRequest partReq : request.getParts()) {
             if (partReq.getExamPartId() == null) continue;
 
-            // 🧩 Tạo TestPart mới
             TestPart testPart = new TestPart();
             testPart.setTestId(test.getTestId());
             testPart.setExamPartId(partReq.getExamPartId());
 
-            // ✅ numQuestions không null
+            // ✅ Tính số lượng câu hỏi
             int numQs = 0;
             if (Boolean.TRUE.equals(partReq.isRandom())) {
                 numQs = partReq.getNumQuestions() != null ? partReq.getNumQuestions() : 0;
@@ -97,17 +100,22 @@ public class TestService {
             testPart.setNumQuestions(numQs);
             testPartRepository.save(testPart);
 
-            // === 3. Random hoặc chọn thủ công câu hỏi ===
+            // === 4️⃣ Random hoặc chọn thủ công câu hỏi ===
             if (partReq.isRandom()) {
                 if (numQs <= 0) continue;
 
-                // 🧠 Random 1 câu để kiểm tra xem có passage không
-                Question anyQ = questionRepository.findOneRandomQuestion(partReq.getExamPartId());
+                // 🧠 Random 1 câu để kiểm tra có passage không
+                Question anyQ = (classId != null)
+                        ? questionRepository.findOneRandomQuestionByClass(partReq.getExamPartId(), classId)
+                        : questionRepository.findOneRandomQuestion(partReq.getExamPartId());
                 if (anyQ == null) continue;
 
                 if (anyQ.getPassageId() != null) {
-                    // Nếu có passage → lấy toàn bộ câu hỏi thuộc passage đó
-                    List<Question> group = questionRepository.findByPassageId(anyQ.getPassageId());
+                    // 🔹 Lấy toàn bộ câu hỏi cùng passage, vẫn lọc theo classId của câu hỏi
+                    List<Question> group = (classId != null)
+                            ? questionRepository.findByPassageIdAndClassId(anyQ.getPassageId(), classId)
+                            : questionRepository.findByPassageId(anyQ.getPassageId());
+
                     for (Question q : group) {
                         TestQuestion tq = new TestQuestion();
                         tq.setTestPartId(testPart.getTestPartId());
@@ -115,11 +123,12 @@ public class TestService {
                         testQuestionRepository.save(tq);
                     }
                 } else {
-                    // Nếu không có passage → random độc lập
-                    List<Question> randomQuestions = questionRepository.findRandomQuestionsByExamPartId(
-                            partReq.getExamPartId(),
-                            PageRequest.of(0, numQs)
-                    );
+                    // 🔹 Random độc lập
+                    List<Question> randomQuestions = (classId != null)
+                            ? questionRepository.findRandomQuestionsByExamPartIdAndClassId(
+                            partReq.getExamPartId(), classId, PageRequest.of(0, numQs))
+                            : questionRepository.findRandomQuestionsByExamPartId(
+                            partReq.getExamPartId(), PageRequest.of(0, numQs));
 
                     for (Question q : randomQuestions) {
                         TestQuestion tq = new TestQuestion();
@@ -128,10 +137,17 @@ public class TestService {
                         testQuestionRepository.save(tq);
                     }
                 }
+
             } else {
-                // 🔹 Chọn thủ công từ danh sách questionIds
+                // 🔹 Chọn thủ công
                 if (partReq.getQuestionIds() != null && !partReq.getQuestionIds().isEmpty()) {
                     for (Long qid : partReq.getQuestionIds()) {
+                        if (classId != null) {
+                            Question q = questionRepository.findById(qid)
+                                    .orElseThrow(() -> new RuntimeException("Question not found"));
+                            if (!classId.equals(q.getClassId())) continue; // bỏ qua câu hỏi khác lớp
+                        }
+
                         TestQuestion tq = new TestQuestion();
                         tq.setTestPartId(testPart.getTestPartId());
                         tq.setQuestionId(qid);
@@ -143,8 +159,6 @@ public class TestService {
 
         return new TestResponse(test);
     }
-
-
 
     private LocalDateTime parseDate(String input) {
         return (input == null || input.isEmpty()) ? null : LocalDateTime.parse(input);

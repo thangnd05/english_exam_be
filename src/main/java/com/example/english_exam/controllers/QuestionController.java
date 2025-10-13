@@ -42,16 +42,24 @@ public class QuestionController {
     }
 
     @GetMapping("/by-part/{examPartId}")
-    public ResponseEntity<List<QuestionResponse>> getQuestionsByPart(@PathVariable Long examPartId) {
-        List<QuestionResponse> list = questionService.getQuestionsByPart(examPartId);
-        return ResponseEntity.ok(list);
+    public ResponseEntity<List<QuestionResponse>> getQuestionsByPart(
+            @PathVariable Long examPartId,
+            @RequestParam(required = false) Long classId
+    ) {
+        List<QuestionResponse> questions = questionService.getQuestionsByPart(examPartId, classId);
+        return ResponseEntity.ok(questions);
     }
 
+
     @GetMapping("/count/by-part/{examPartId}")
-    public ResponseEntity<Long> countQuestionsByPart(@PathVariable Long examPartId) {
-        long count = questionService.countByExamPartId(examPartId);
+    public ResponseEntity<Long> countQuestionsByPart(
+            @PathVariable Long examPartId,
+            @RequestParam(required = false) Long classId
+    ) {
+        long count = questionService.countByExamPartId(examPartId, classId);
         return ResponseEntity.ok(count);
     }
+
 
     // =================== CREATE ===================
 
