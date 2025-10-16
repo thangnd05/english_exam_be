@@ -38,6 +38,7 @@ public class TestService {
     private final AnswerService answerService;
     private final RoleRepository  roleRepository;
     private final UserRepository userRepository;
+    private final ExamPartRepository  examPartRepository;
     private final CloudinaryService  cloudinaryService;
     private final ExamTypeRepository examTypeRepository;
     private final PassageRepository  passageRepository;
@@ -159,6 +160,7 @@ public class TestService {
 
         return new TestResponse(test);
     }
+
 
     private LocalDateTime parseDate(String input) {
         return (input == null || input.isEmpty()) ? null : LocalDateTime.parse(input);
@@ -309,7 +311,7 @@ public class TestService {
                     .map(q -> passageMap.get(q.getPassageId()))
                     .filter(Objects::nonNull)
                     .map(p -> new PassageResponse(
-                            p.getPassageId(), p.getContent(), p.getMediaUrl(), p.getPassageType().name()
+                            p.getPassageId(), p.getContent(), p.getMediaUrl(), p.getPassageType()
                     ))
                     .orElse(null);
 
@@ -352,9 +354,7 @@ public class TestService {
         Test test = testRepository.findById(testId)
                 .orElseThrow(() -> new RuntimeException("Test not found"));
 
-        // === BƯỚC 1: LẤY DỮ LIỆU HÀNG LOẠT ĐỂ TỐI ƯU HÓA (BATCH FETCHING) ===
-
-        // Lấy tất cả TestPart của Test (1 query)
+        // === BƯỚC 1: LẤY DỮ LIỆU HÀNG LOẠT ĐỂ TỐI ƯU HÓA ===
         List<TestPart> testParts = testPartRepository.findByTestId(test.getTestId());
         if (testParts.isEmpty()) {
             return new TestAdminResponse(
@@ -371,23 +371,23 @@ public class TestService {
                     test.calculateStatus().name(),
                     test.getMaxAttempts(),
                     Collections.emptyList(),
-                    test.getClassId()   // ✅ thêm dòng này
+                    test.getClassId()
             );
         }
 
         List<Long> testPartIds = testParts.stream().map(TestPart::getTestPartId).toList();
 
-        // Lấy tất cả TestQuestion của các TestPart (1 query)
+        // Lấy tất cả TestQuestion của các TestPart
         List<TestQuestion> allTestQuestions = testQuestionRepository.findByTestPartIdIn(testPartIds);
         Map<Long, List<TestQuestion>> questionsByPartId = allTestQuestions.stream()
                 .collect(Collectors.groupingBy(TestQuestion::getTestPartId));
 
-        // Lấy tất cả Question từ các TestQuestion (1 query)
+        // Lấy tất cả Question
         List<Long> allQuestionIds = allTestQuestions.stream().map(TestQuestion::getQuestionId).toList();
         Map<Long, Question> questionMap = questionRepository.findAllById(allQuestionIds).stream()
                 .collect(Collectors.toMap(Question::getQuestionId, q -> q));
 
-        // Lấy tất cả Passage liên quan (1 query)
+        // Lấy tất cả Passage
         Set<Long> allPassageIds = questionMap.values().stream()
                 .map(Question::getPassageId)
                 .filter(Objects::nonNull)
@@ -395,52 +395,95 @@ public class TestService {
         Map<Long, Passage> passageMap = passageRepository.findAllById(allPassageIds).stream()
                 .collect(Collectors.toMap(Passage::getPassageId, p -> p));
 
-        // Lấy tất cả Answer liên quan cho admin (1 query)
-        Map<Long, List<AnswerAdminResponse>> answersByQuestionId = answerService.getAnswersForMultipleQuestionsForAdmin(allQuestionIds);
+        // Lấy tất cả Answer
+        Map<Long, List<AnswerAdminResponse>> answersByQuestionId =
+                answerService.getAnswersForMultipleQuestionsForAdmin(allQuestionIds);
 
-        // === BƯỚC 2: LẮP RÁP DỮ LIỆU TRONG BỘ NHỚ (NO MORE DATABASE CALLS) ===
-
+        // === BƯỚC 2: LẮP RÁP DỮ LIỆU TRONG BỘ NHỚ ===
         List<TestPartAdminResponse> partResponses = testParts.stream().map(tp -> {
-
             List<TestQuestion> tqList = questionsByPartId.getOrDefault(tp.getTestPartId(), Collections.emptyList());
 
-            // Lấy passage cho cả part này
+            // Lấy passage chung cho part này (nếu có)
             PassageResponse passageResponseForPart = tqList.stream()
                     .map(tq -> questionMap.get(tq.getQuestionId()))
                     .filter(q -> q != null && q.getPassageId() != null)
                     .findFirst()
                     .map(q -> passageMap.get(q.getPassageId()))
                     .filter(Objects::nonNull)
-                    .map(p -> new PassageResponse(p.getPassageId(), p.getContent(), p.getMediaUrl(), p.getPassageType().name()))
+                    .map(p -> new PassageResponse(
+                            p.getPassageId(),
+                            p.getContent(),
+                            p.getMediaUrl(),
+                            p.getPassageType()
+                    ))
                     .orElse(null);
 
+            // Lắp danh sách câu hỏi
             List<QuestionAdminResponse> questionResponses = tqList.stream().map(tq -> {
                 Question q = questionMap.get(tq.getQuestionId());
                 if (q == null) return null;
 
-                List<AnswerAdminResponse> answers = answersByQuestionId.getOrDefault(q.getQuestionId(), Collections.emptyList());
+                List<AnswerAdminResponse> answers =
+                        answersByQuestionId.getOrDefault(q.getQuestionId(), Collections.emptyList());
 
-                // Constructor của QuestionAdminResponse giờ đã đơn giản hơn
+                PassageResponse passageDto = null;
+                if (q.getPassageId() != null) {
+                    Passage p = passageMap.get(q.getPassageId());
+                    if (p != null) {
+                        passageDto = new PassageResponse(
+                                p.getPassageId(),
+                                p.getContent(),
+                                p.getMediaUrl(),
+                                p.getPassageType()
+                        );
+                    }
+                }
+
+                // Lấy examTypeId từ examPart
+                Long examTypeId = examPartRepository.findById(q.getExamPartId())
+                        .map(ExamPart::getExamTypeId)
+                        .orElse(null);
+
                 return new QuestionAdminResponse(
-                        q.getQuestionId(), q.getExamPartId(), q.getQuestionText(),
-                        q.getQuestionType(), q.getExplanation(), tp.getTestPartId(),
-                        answers,q.getClassId()  // ✅ thêm dòng này
-
+                        q.getQuestionId(),
+                        examTypeId,                 // 🟢 thêm mới
+                        q.getExamPartId(),
+                        q.getQuestionText(),
+                        q.getQuestionType(),
+                        q.getExplanation(),
+                        passageDto,                 // 🟢 thêm mới
+                        tp.getTestPartId(),
+                        answers,
+                        q.getClassId()
                 );
             }).filter(Objects::nonNull).toList();
 
-            // Gán passageResponse vào TestPartAdminResponse
+            // Tạo TestPartAdminResponse
             return new TestPartAdminResponse(
-                    tp.getTestPartId(), tp.getExamPartId(), tp.getNumQuestions(), passageResponseForPart, questionResponses
+                    tp.getTestPartId(),
+                    tp.getExamPartId(),
+                    tp.getNumQuestions(),
+                    passageResponseForPart,
+                    questionResponses
             );
         }).toList();
 
-        // === BƯỚC 3: TRẢ VỀ RESPONSE ===
+        // === BƯỚC 3: TRẢ VỀ RESPONSE CHO ADMIN ===
         return new TestAdminResponse(
-                test.getTestId(), test.getTitle(), test.getDescription(), test.getExamTypeId(),
-                test.getCreatedBy(), test.getCreatedAt(), test.getBannerUrl(), test.getDurationMinutes(),
-                test.getAvailableFrom(), test.getAvailableTo(), test.calculateStatus().name(),
-                test.getMaxAttempts(), partResponses,test.getClassId()
+                test.getTestId(),
+                test.getTitle(),
+                test.getDescription(),
+                test.getExamTypeId(),
+                test.getCreatedBy(),
+                test.getCreatedAt(),
+                test.getBannerUrl(),
+                test.getDurationMinutes(),
+                test.getAvailableFrom(),
+                test.getAvailableTo(),
+                test.calculateStatus().name(),
+                test.getMaxAttempts(),
+                partResponses,
+                test.getClassId()
         );
     }
 
@@ -495,10 +538,6 @@ public class TestService {
         // ✅ Nếu hợp lệ, trả danh sách bài kiểm tra
         return testRepository.findByClassId(classId);
     }
-
-
-
-
 
     @Transactional
     public TestResponse createTestWithNewQuestions(CreateTestWithQuestionsRequest request,
@@ -583,7 +622,7 @@ public class TestService {
                         savedPassage.getPassageId(),
                         savedPassage.getContent(),
                         savedPassage.getMediaUrl(),
-                        savedPassage.getPassageType().name()
+                        savedPassage.getPassageType()
                 );
             }
 
@@ -662,5 +701,214 @@ public class TestService {
                 partResponses
         );
     }
+
+
+    @Transactional
+    public TestResponse updateTestFromQuestionBank(Long testId,
+                                                   TestRequest request,
+                                                   MultipartFile bannerFile,
+                                                   HttpServletRequest httpRequest) throws IOException {
+
+        // === 1️⃣ Lấy Test hiện có ===
+        Test existing = testRepository.findById(testId)
+                .orElseThrow(() -> new RuntimeException("Test not found with ID: " + testId));
+
+        Long currentUserId = authUtils.getUserId(httpRequest);
+        Long classId = request.getClassId();
+
+        // 🧩 Kiểm tra quyền sửa (chỉ người tạo hoặc admin)
+        if (!existing.getCreatedBy().equals(currentUserId)) {
+            throw new RuntimeException("❌ Bạn không có quyền sửa đề thi này!");
+        }
+
+        // === 2️⃣ Cập nhật thông tin chung ===
+        existing.setTitle(request.getTitle());
+        existing.setDescription(request.getDescription());
+        existing.setExamTypeId(request.getExamTypeId());
+        existing.setDurationMinutes(request.getDurationMinutes());
+        existing.setAvailableFrom(parseDate(request.getAvailableFrom()));
+        existing.setAvailableTo(parseDate(request.getAvailableTo()));
+        existing.setMaxAttempts(request.getMaxAttempts());
+        existing.setClassId(classId);
+
+        // 🖼️ Cập nhật banner nếu có file mới
+        if (bannerFile != null && !bannerFile.isEmpty()) {
+            String url = cloudinaryService.uploadImage(bannerFile);
+            existing.setBannerUrl(url);
+        }
+
+        testRepository.save(existing);
+
+        // === 3️⃣ Xóa phần và câu hỏi cũ ===
+        List<TestPart> oldParts = testPartRepository.findByTestId(testId);
+        for (TestPart tp : oldParts) {
+            testQuestionRepository.deleteByTestPartId(tp.getTestPartId());
+        }
+        testPartRepository.deleteAll(oldParts);
+
+        // === 4️⃣ Tạo lại các phần mới ===
+        for (PartRequest partReq : request.getParts()) {
+            if (partReq.getExamPartId() == null) continue;
+
+            TestPart testPart = new TestPart();
+            testPart.setTestId(existing.getTestId());
+            testPart.setExamPartId(partReq.getExamPartId());
+
+            int numQs = 0;
+            if (Boolean.TRUE.equals(partReq.isRandom())) {
+                numQs = partReq.getNumQuestions() != null ? partReq.getNumQuestions() : 0;
+            } else if (partReq.getQuestionIds() != null) {
+                numQs = partReq.getQuestionIds().size();
+            }
+            testPart.setNumQuestions(numQs);
+            testPartRepository.save(testPart);
+
+            // === 5️⃣ Random hoặc chọn thủ công ===
+            if (partReq.isRandom()) {
+                if (numQs <= 0) continue;
+
+                // 🧠 Random 1 câu để xác định passage
+                Question anyQ = (classId != null)
+                        ? questionRepository.findOneRandomQuestionByClass(partReq.getExamPartId(), classId)
+                        : questionRepository.findOneRandomQuestion(partReq.getExamPartId());
+                if (anyQ == null) continue;
+
+                if (anyQ.getPassageId() != null) {
+                    // 🔹 Lấy các câu cùng passage, vẫn lọc theo classId
+                    List<Question> group = (classId != null)
+                            ? questionRepository.findByPassageIdAndClassId(anyQ.getPassageId(), classId)
+                            : questionRepository.findByPassageId(anyQ.getPassageId());
+
+                    for (Question q : group) {
+                        TestQuestion tq = new TestQuestion();
+                        tq.setTestPartId(testPart.getTestPartId());
+                        tq.setQuestionId(q.getQuestionId());
+                        testQuestionRepository.save(tq);
+                    }
+                } else {
+                    // 🔹 Random độc lập
+                    List<Question> randomQuestions = (classId != null)
+                            ? questionRepository.findRandomQuestionsByExamPartIdAndClassId(
+                            partReq.getExamPartId(), classId, PageRequest.of(0, numQs))
+                            : questionRepository.findRandomQuestionsByExamPartId(
+                            partReq.getExamPartId(), PageRequest.of(0, numQs));
+
+                    for (Question q : randomQuestions) {
+                        TestQuestion tq = new TestQuestion();
+                        tq.setTestPartId(testPart.getTestPartId());
+                        tq.setQuestionId(q.getQuestionId());
+                        testQuestionRepository.save(tq);
+                    }
+                }
+
+            } else {
+                // 🔹 Thủ công
+                if (partReq.getQuestionIds() != null && !partReq.getQuestionIds().isEmpty()) {
+                    for (Long qid : partReq.getQuestionIds()) {
+                        if (classId != null) {
+                            Question q = questionRepository.findById(qid)
+                                    .orElseThrow(() -> new RuntimeException("Question not found"));
+                            if (!classId.equals(q.getClassId())) continue;
+                        }
+
+                        TestQuestion tq = new TestQuestion();
+                        tq.setTestPartId(testPart.getTestPartId());
+                        tq.setQuestionId(qid);
+                        testQuestionRepository.save(tq);
+                    }
+                }
+            }
+        }
+
+        return new TestResponse(existing);
+    }
+
+    public TestAdminResponse getTestDetailForAdmin(Long testId) {
+        Test test = testRepository.findById(testId)
+                .orElseThrow(() -> new RuntimeException("Test not found"));
+
+        TestAdminResponse dto = new TestAdminResponse();
+        dto.setTestId(test.getTestId());
+        dto.setTitle(test.getTitle());
+        dto.setDescription(test.getDescription());
+        dto.setExamTypeId(test.getExamTypeId());
+        dto.setCreatedBy(test.getCreatedBy());
+        dto.setCreatedAt(test.getCreatedAt());
+        dto.setBannerUrl(test.getBannerUrl());
+        dto.setDurationMinutes(test.getDurationMinutes());
+        dto.setAvailableFrom(test.getAvailableFrom());
+        dto.setAvailableTo(test.getAvailableTo());
+        dto.setMaxAttempts(test.getMaxAttempts());
+        dto.setClassId(test.getClassId());
+
+        // 🔹 Load test parts
+        List<TestPart> parts = testPartRepository.findByTestId(testId);
+        List<TestPartAdminResponse> partResponses = new ArrayList<>();
+
+        for (TestPart part : parts) {
+            TestPartAdminResponse partDto = new TestPartAdminResponse();
+            partDto.setTestPartId(part.getTestPartId());
+            partDto.setExamPartId(part.getExamPartId());
+            partDto.setNumQuestions(part.getNumQuestions());
+
+            // 🔹 Load questions
+            List<TestQuestion> tqs = testQuestionRepository.findByTestPartId(part.getTestPartId());
+            List<QuestionAdminResponse> questionDtos = new ArrayList<>();
+
+            PassageResponse passageDto = null;
+
+            for (TestQuestion tq : tqs) {
+                Question q = questionRepository.findById(tq.getQuestionId()).orElse(null);
+                if (q == null) continue;
+
+                QuestionAdminResponse qDto = new QuestionAdminResponse();
+                qDto.setQuestionId(q.getQuestionId());
+                qDto.setExamPartId(q.getExamPartId());
+                qDto.setQuestionText(q.getQuestionText());
+                qDto.setQuestionType(q.getQuestionType());
+                qDto.setExplanation(q.getExplanation());
+                qDto.setClassId(q.getClassId());
+                qDto.setTestPartId(part.getTestPartId());
+
+                // ✅ Nếu có passage thì build PassageResponse đúng cấu trúc
+                if (q.getPassageId() != null && passageDto == null) {
+                    Passage passage = passageRepository.findById(q.getPassageId()).orElse(null);
+                    if (passage != null) {
+                        passageDto = new PassageResponse(
+                                passage.getPassageId(),
+                                passage.getContent(),
+                                passage.getMediaUrl(),
+                                passage.getPassageType()
+                        );
+                    }
+                }
+
+                // ✅ Gắn danh sách đáp án
+                List<Answer> answers = answerRepository.findByQuestionId(q.getQuestionId());
+                List<AnswerAdminResponse> answerDtos = answers.stream()
+                        .map(a -> new AnswerAdminResponse(
+                                a.getAnswerId(),
+                                a.getAnswerText(),
+                                a.getIsCorrect(),          // ✅ Gọi getter đúng cách
+                                a.getAnswerLabel()
+                        ))
+                        .toList();
+
+                qDto.setAnswers(answerDtos);
+                questionDtos.add(qDto);
+            }
+
+            partDto.setQuestions(questionDtos);
+            partDto.setPassage(passageDto);
+            partResponses.add(partDto);
+        }
+
+        dto.setParts(partResponses);
+        return dto;
+    }
+
+
+
+
 
 }

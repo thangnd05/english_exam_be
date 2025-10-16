@@ -11,12 +11,13 @@ import java.util.List;
 @AllArgsConstructor
 public class QuestionAdminResponse {
     private Long questionId;
+    private Long examTypeId; // 🟢 Thêm để FE biết kỳ thi nào
     private Long examPartId;
     private String questionText;
     private QuestionType questionType;
     private String explanation;
+    private PassageResponse passage; // 🟢 Thêm để FE hiển thị nội dung passage
     private Long testPartId;
-    private List<AnswerAdminResponse> answers;    // có isCorrect
+    private List<AnswerAdminResponse> answers;
     private Long classId;
-
 }

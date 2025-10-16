@@ -11,4 +11,8 @@ public class AnswerAdminResponse {
     private String answerText;
     private Boolean isCorrect;
     private String answerLabel;
+
+    public Boolean getCorrect() {
+        return isCorrect;
+    }
 }

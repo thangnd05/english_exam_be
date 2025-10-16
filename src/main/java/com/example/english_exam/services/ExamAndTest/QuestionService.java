@@ -52,47 +52,55 @@ public class QuestionService {
     }
 
     @Transactional // ✅ Bọc toàn bộ phương thức trong một giao dịch
-    public QuestionAdminResponse createQuestionWithAnswersAdmin(QuestionRequest request, HttpServletRequest httpRequest) {
+    public QuestionAdminResponse createQuestionWithAnswersAdmin(
+            QuestionRequest request,
+            HttpServletRequest httpRequest) {
 
-        Long currentUserId = authUtils.getUserId(httpRequest);;
+        Long currentUserId = authUtils.getUserId(httpRequest);
         if (currentUserId == null) {
             throw new RuntimeException("Không xác định được người dùng từ token!");
         }
 
+        // ✅ 1. Kiểm tra và tạo Passage trước (nếu có trong request)
         Passage passageContext = null;
         Long passageId = null;
 
-        // ✅ 1. Kiểm tra và tạo Passage trước (nếu có trong request)
-        if (request.getPassage() != null) {
+        if (request.getPassage() != null &&
+                ((request.getPassage().getContent() != null && !request.getPassage().getContent().trim().isEmpty()) ||
+                        request.getPassage().getMediaUrl() != null)) {
+
             Passage newPassage = new Passage();
             newPassage.setContent(request.getPassage().getContent());
             newPassage.setMediaUrl(request.getPassage().getMediaUrl());
             newPassage.setPassageType(request.getPassage().getPassageType());
 
-            passageContext = passageRepository.save(newPassage); // Lưu và giữ lại đối tượng
+            passageContext = passageRepository.save(newPassage);
             passageId = passageContext.getPassageId();
         }
 
-        // 2. Tạo Question với passageId vừa có (hoặc null)
+
+        // ✅ 2. Tạo Question với passageId vừa có (hoặc null)
         Question question = new Question();
         question.setExamPartId(request.getExamPartId());
-        question.setPassageId(passageId); // Sử dụng ID vừa tạo hoặc null
+        question.setPassageId(passageId);
         question.setQuestionText(request.getQuestionText());
         question.setQuestionType(request.getQuestionType());
-        question.setCreatedBy(currentUserId); // 🆕 thêm dòng này
+        question.setCreatedBy(currentUserId);
 
-        // 🔹 Gắn classId nếu có (có thể null)
         if (request.getClassId() != null) {
             question.setClassId(request.getClassId());
         }
+
         question = questionRepository.save(question);
 
-        // 3. Chuẩn bị và tạo Answers
+        // ✅ 3. Tạo danh sách Answer
         List<Answer> answerEntities = new ArrayList<>();
+
         if (request.getAnswers() != null && !request.getAnswers().isEmpty()) {
             List<Answer> answersToSave = new ArrayList<>();
+
             switch (request.getQuestionType()) {
-                case MCQ:
+                case MCQ -> {
                     for (AnswerRequest ar : request.getAnswers()) {
                         Answer ans = new Answer();
                         ans.setQuestionId(question.getQuestionId());
@@ -101,8 +109,8 @@ public class QuestionService {
                         ans.setAnswerLabel(ar.getLabel());
                         answersToSave.add(ans);
                     }
-                    break;
-                case FILL_BLANK:
+                }
+                case FILL_BLANK -> {
                     AnswerRequest ar = request.getAnswers().get(0);
                     Answer ans = new Answer();
                     ans.setQuestionId(question.getQuestionId());
@@ -110,40 +118,44 @@ public class QuestionService {
                     ans.setIsCorrect(true);
                     ans.setAnswerLabel(ar.getLabel() != null ? ar.getLabel() : "");
                     answersToSave.add(ans);
-                    break;
+                }
             }
-            // ✅ Tối ưu hóa: Dùng saveAll để lưu tất cả câu trả lời trong 1 lần gọi DB
+
             if (!answersToSave.isEmpty()) {
                 answerEntities = answerRepository.saveAll(answersToSave);
             }
         }
 
-        // 4. Sinh explanation nếu chưa có (không thay đổi)
+        // ✅ 4. Sinh explanation nếu chưa có
         if (question.getExplanation() == null || question.getExplanation().isEmpty()) {
             String explanation = geminiService.explainQuestion(question, answerEntities, passageContext);
             question.setExplanation(explanation);
             question = questionRepository.save(question);
         }
 
-        // 5. Build PassageResponse từ passageContext đã có (nếu tồn tại)
+        // ✅ 5. Build PassageResponse nếu có
         PassageResponse passageResponse = null;
         if (passageContext != null) {
             passageResponse = new PassageResponse(
                     passageContext.getPassageId(),
-                    passageContext.getContent(),
+                    passageContext.getContent(),        // đúng với DTO
                     passageContext.getMediaUrl(),
-                    passageContext.getPassageType().name()
+                    passageContext.getPassageType()
             );
+
         }
 
-        // 6. Convert answers sang DTO (không thay đổi)
+        // ✅ 6. Convert answers sang DTO
         List<AnswerAdminResponse> answerAdminResponses = answerEntities.stream()
                 .map(a -> new AnswerAdminResponse(
-                        a.getAnswerId(), a.getAnswerText(), a.getIsCorrect(), a.getAnswerLabel()
+                        a.getAnswerId(),
+                        a.getAnswerText(),
+                        a.getIsCorrect(),
+                        a.getAnswerLabel()
                 ))
-                .collect(Collectors.toList());
+                .toList();
 
-        // 7. Gán vào test_part nếu có (không thay đổi)
+        // ✅ 7. Gán vào test_part nếu có
         if (request.getTestPartId() != null) {
             TestQuestion tq = new TestQuestion();
             tq.setTestPartId(request.getTestPartId());
@@ -151,13 +163,20 @@ public class QuestionService {
             testQuestionRepository.save(tq);
         }
 
-        // 8. Trả về DTO admin
+        // ✅ 8. Lấy examTypeId từ examPart để trả ra FE
+        Long examTypeId = examPartRepository.findById(question.getExamPartId())
+                .map(p -> p.getExamTypeId())
+                .orElse(null);
+
+        // ✅ 9. Trả về DTO đầy đủ cho FE
         return new QuestionAdminResponse(
                 question.getQuestionId(),
+                examTypeId,                           // 🟢 mới thêm
                 question.getExamPartId(),
                 question.getQuestionText(),
                 question.getQuestionType(),
                 question.getExplanation(),
+                passageResponse,                      // 🟢 mới thêm
                 request.getTestPartId(),
                 answerAdminResponses,
                 question.getClassId()
@@ -214,33 +233,55 @@ public class QuestionService {
 
 
     @Transactional
-    public List<QuestionAdminResponse> createQuestionsWithPassage(CreateQuestionsWithPassageRequest request,
-                                                                  MultipartFile audioFile,
-                                                                  HttpServletRequest httpRequest) throws IOException {
-
+    public List<QuestionAdminResponse> createQuestionsWithPassage(
+            CreateQuestionsWithPassageRequest request,
+            MultipartFile audioFile,
+            HttpServletRequest httpRequest) throws IOException {
 
         Long currentUserId = authUtils.getUserId(httpRequest);
         List<QuestionAdminResponse> responses = new ArrayList<>();
 
-        // 1️⃣ Tạo Passage trước
-        Passage passage = new Passage();
-        passage.setContent(request.getPassage().getContent());
-        passage.setPassageType(request.getPassage().getPassageType());
+        // 🟢 1️⃣ Kiểm tra xem có passage không
+        Passage passage = null;
+        if (request.getPassage() != null &&
+                ((request.getPassage().getContent() != null && !request.getPassage().getContent().trim().isEmpty()) ||
+                        (request.getPassage().getPassageType() == Passage.PassageType.LISTENING &&
+                                audioFile != null && !audioFile.isEmpty()))) {
 
-        if (passage.getPassageType() == Passage.PassageType.LISTENING && audioFile != null && !audioFile.isEmpty()) {
-            String audioUrl = cloudinaryService.uploadAudio(audioFile);
-            passage.setMediaUrl(audioUrl);
-        } else {
-            passage.setMediaUrl(request.getPassage().getMediaUrl());
+            passage = new Passage();
+            passage.setContent(request.getPassage().getContent());
+            passage.setPassageType(request.getPassage().getPassageType());
+
+            if (passage.getPassageType() == Passage.PassageType.LISTENING
+                    && audioFile != null && !audioFile.isEmpty()) {
+                String audioUrl = cloudinaryService.uploadAudio(audioFile);
+                passage.setMediaUrl(audioUrl);
+            } else {
+                passage.setMediaUrl(request.getPassage().getMediaUrl());
+            }
+
+            passage = passageRepository.save(passage);
         }
 
-        passage = passageRepository.save(passage);
+        // 🟢 2️⃣ Lấy examTypeId qua examPartId
+        Long examTypeId = examPartRepository.findById(request.getExamPartId())
+                .map(p -> p.getExamTypeId())
+                .orElse(null);
 
-        // 2️⃣ Tạo các Question cùng Passage
+        // 🟢 3️⃣ Chuẩn bị PassageResponse (nếu có)
+        PassageResponse passageResponse = (passage != null)
+                ? new PassageResponse(
+                passage.getPassageId(),
+                passage.getContent(),
+                passage.getMediaUrl(),
+                passage.getPassageType())
+                : null;
+
+        // 🟢 4️⃣ Tạo các Question
         for (NormalQuestionRequest qReq : request.getQuestions()) {
             Question question = new Question();
             question.setExamPartId(request.getExamPartId());
-            question.setPassageId(passage.getPassageId());
+            if (passage != null) question.setPassageId(passage.getPassageId());
             question.setQuestionText(qReq.getQuestionText());
             question.setQuestionType(qReq.getQuestionType());
             question.setCreatedBy(currentUserId);
@@ -248,11 +289,12 @@ public class QuestionService {
             if (request.getClassId() != null) {
                 question.setClassId(request.getClassId());
             }
+
             question = questionRepository.save(question);
 
-            // 3️⃣ Lưu đáp án
+            // 🟢 5️⃣ Lưu đáp án
             List<Answer> answers = new ArrayList<>();
-            if (qReq.getAnswers() != null) {
+            if (qReq.getAnswers() != null && !qReq.getAnswers().isEmpty()) {
                 for (AnswerRequest aReq : qReq.getAnswers()) {
                     Answer ans = new Answer();
                     ans.setQuestionId(question.getQuestionId());
@@ -264,7 +306,7 @@ public class QuestionService {
                 answerRepository.saveAll(answers);
             }
 
-            // 4️⃣ Build Response
+            // 🟢 6️⃣ Convert sang DTO
             List<AnswerAdminResponse> answerDtos = answers.stream()
                     .map(a -> new AnswerAdminResponse(
                             a.getAnswerId(),
@@ -273,19 +315,202 @@ public class QuestionService {
                             a.getAnswerLabel()))
                     .toList();
 
-            responses.add(new QuestionAdminResponse(
+            // 🟢 7️⃣ Tạo QuestionAdminResponse đầy đủ
+            QuestionAdminResponse response = new QuestionAdminResponse(
                     question.getQuestionId(),
+                    examTypeId,
                     question.getExamPartId(),
                     question.getQuestionText(),
                     question.getQuestionType(),
                     question.getExplanation(),
+                    passageResponse, // null nếu không có passage
                     null,
                     answerDtos,
                     question.getClassId()
-            ));
+            );
+
+            responses.add(response);
         }
 
         return responses;
     }
+
+
+
+    @Transactional
+    public QuestionAdminResponse updateQuestionWithPassage(
+            Long questionId,
+            QuestionRequest request,
+            MultipartFile audioFile,
+            HttpServletRequest httpRequest) throws IOException {
+
+        Long currentUserId = authUtils.getUserId(httpRequest);
+
+        // 🔹 Tìm câu hỏi cũ
+        Question existing = questionRepository.findById(questionId)
+                .orElseThrow(() -> new RuntimeException("Question not found"));
+
+        // 🔹 Kiểm tra quyền sửa
+        if (!existing.getCreatedBy().equals(currentUserId)) {
+            throw new RuntimeException("Bạn không có quyền sửa câu hỏi này!");
+        }
+
+        // 🔹 Cập nhật nội dung question
+        existing.setQuestionText(request.getQuestionText());
+        existing.setQuestionType(request.getQuestionType());
+        if (request.getClassId() != null) {
+            existing.setClassId(request.getClassId());
+        }
+
+        // 🔹 Cập nhật passage (nếu có)
+        Passage passage = null;
+        if (request.getPassage() != null) {
+            if (existing.getPassageId() != null) {
+                passage = passageRepository.findById(existing.getPassageId())
+                        .orElse(new Passage());
+            } else {
+                passage = new Passage();
+            }
+
+            passage.setContent(request.getPassage().getContent());
+            passage.setPassageType(request.getPassage().getPassageType());
+
+            // 🔹 Nếu là Listening và có audio mới → upload lại
+            if (passage.getPassageType() == Passage.PassageType.LISTENING
+                    && audioFile != null && !audioFile.isEmpty()) {
+                String audioUrl = cloudinaryService.uploadAudio(audioFile);
+                passage.setMediaUrl(audioUrl);
+            } else {
+                passage.setMediaUrl(request.getPassage().getMediaUrl());
+            }
+
+            passage = passageRepository.save(passage);
+            existing.setPassageId(passage.getPassageId());
+        }
+
+        questionRepository.save(existing);
+
+        // 🔹 Xóa đáp án cũ theo questionId (chú ý deleteByQuestionId, không phải deleteById)
+        answerRepository.deleteByQuestionId(existing.getQuestionId());
+
+        // 🔹 Thêm mới danh sách đáp án
+        List<Answer> answers = new ArrayList<>();
+        if (request.getAnswers() != null && !request.getAnswers().isEmpty()) {
+            for (AnswerRequest aReq : request.getAnswers()) {
+                Answer ans = new Answer();
+                ans.setQuestionId(existing.getQuestionId());
+                ans.setAnswerText(aReq.getAnswerText());
+                ans.setAnswerLabel(aReq.getLabel());
+                ans.setIsCorrect(aReq.getIsCorrect());
+                answers.add(ans);
+            }
+            answerRepository.saveAll(answers);
+        }
+
+        // 🔹 Convert Answer sang DTO
+        List<AnswerAdminResponse> answerDtos = answers.stream()
+                .map(a -> new AnswerAdminResponse(
+                        a.getAnswerId(),
+                        a.getAnswerText(),
+                        a.getIsCorrect(),
+                        a.getAnswerLabel()))
+                .toList();
+
+        // 🔹 Build PassageResponse nếu có
+        PassageResponse passageDto = null;
+        if (passage != null) {
+            passageDto = new PassageResponse(
+                    passage.getPassageId(),
+                    passage.getContent(),
+                    passage.getMediaUrl(),
+                    passage.getPassageType()
+            );
+        } else if (existing.getPassageId() != null) {
+            // Nếu passage không gửi lại nhưng question đã có passage
+            Passage oldPassage = passageRepository.findById(existing.getPassageId()).orElse(null);
+            if (oldPassage != null) {
+                passageDto = new PassageResponse(
+                        oldPassage.getPassageId(),
+                        oldPassage.getContent(),
+                        oldPassage.getMediaUrl(),
+                        oldPassage.getPassageType()
+                );
+            }
+        }
+
+        // 🔹 Lấy examTypeId thông qua examPart
+        Long examTypeId = examPartRepository.findById(existing.getExamPartId())
+                .map(p -> p.getExamTypeId())
+                .orElse(null);
+
+        // 🔹 Trả về DTO đầy đủ
+        return new QuestionAdminResponse(
+                existing.getQuestionId(),
+                examTypeId,                      // 🟢 mới thêm
+                existing.getExamPartId(),
+                existing.getQuestionText(),
+                existing.getQuestionType(),
+                existing.getExplanation(),
+                passageDto,                      // 🟢 mới thêm
+                null,
+                answerDtos,
+                existing.getClassId()
+        );
+    }
+
+
+    public QuestionAdminResponse getQuestionDetailAdmin(Long questionId) {
+        Question question = questionRepository.findById(questionId)
+                .orElseThrow(() -> new RuntimeException("Question not found"));
+
+        // 🔹 Lấy examTypeId qua examPart
+        Long examTypeId = examPartRepository.findById(question.getExamPartId())
+                .map(p -> p.getExamTypeId())
+                .orElse(null);
+
+        // 🔹 Lấy passage
+        PassageResponse passageDto = null;
+        if (question.getPassageId() != null) {
+            Passage p = passageRepository.findById(question.getPassageId())
+                    .orElse(null);
+            if (p != null) {
+                passageDto = new PassageResponse(
+                        p.getPassageId(),
+                        p.getContent(),
+                        p.getMediaUrl(),
+                        p.getPassageType()
+                );
+            }
+        }
+
+        // 🔹 Lấy danh sách đáp án
+        List<AnswerAdminResponse> answers = answerRepository.findByQuestionId(questionId)
+                .stream()
+                .map(a -> new AnswerAdminResponse(
+                        a.getAnswerId(),
+                        a.getAnswerText(),
+                        a.getIsCorrect(),
+                        a.getAnswerLabel()
+                ))
+                .toList();
+
+        // 🔹 Build DTO trả ra
+        return new QuestionAdminResponse(
+                question.getQuestionId(),
+                examTypeId,
+                question.getExamPartId(),
+                question.getQuestionText(),
+                question.getQuestionType(),
+                question.getExplanation(),
+                passageDto,
+                null, // testPartId
+                answers,
+                question.getClassId()
+        );
+
+    }
+
+
+
 
 }

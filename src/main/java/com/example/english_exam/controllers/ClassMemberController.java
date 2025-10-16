@@ -99,10 +99,14 @@ public class ClassMemberController {
     @GetMapping("/my-classes")
     public ResponseEntity<?> getMyClasses(HttpServletRequest request) {
         try {
-            List<ClassStudentResponse> myClasses = classMemberService.getClassesOfCurrentStudent(request);
+            Map<String, Object> myClasses = classMemberService.getClassesOfCurrentStudent(request);
 
-            if (myClasses.isEmpty()) {
-                return ResponseEntity.ok(Map.of("message", "Bạn chưa tham gia lớp học nào."));
+            List<?> teaching = (List<?>) myClasses.get("teachingClasses");
+            List<?> learning = (List<?>) myClasses.get("learningClasses");
+
+            if ((teaching == null || teaching.isEmpty()) &&
+                    (learning == null || learning.isEmpty())) {
+                return ResponseEntity.ok(Map.of("message", "Bạn chưa có lớp học nào."));
             }
 
             return ResponseEntity.ok(myClasses);
@@ -111,5 +115,7 @@ public class ClassMemberController {
             return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));
         }
     }
+
+
 
 }

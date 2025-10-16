@@ -16,9 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Objects;
-import java.util.Optional;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -121,15 +119,16 @@ public class ClassMemberService {
         classMemberRepository.removeStudent(classId, userId);
     }
 
-    public List<ClassStudentResponse> getClassesOfCurrentStudent(HttpServletRequest request) {
+    public Map<String, Object> getClassesOfCurrentStudent(HttpServletRequest request) {
         Long currentUserId = authUtils.getUserId(request);
 
-        // 🔹 Lấy danh sách class_member mà học sinh đã được duyệt
+        Map<String, Object> result = new HashMap<>();
+
+        // 🧩 1️⃣ Lớp mà tôi đang học (đã được duyệt)
         List<ClassMember> classMembers =
                 classMemberRepository.findByUserIdAndStatus(currentUserId, ClassMember.MemberStatus.APPROVED);
 
-        // 🔹 Chuyển từng bản ghi thành DTO có className + teacherName
-        return classMembers.stream().map(member -> {
+        List<ClassStudentResponse> learningClasses = classMembers.stream().map(member -> {
             ClassEntity clazz = classRepository.findById(member.getClassId())
                     .orElse(null);
             if (clazz == null) return null;
@@ -145,6 +144,26 @@ public class ClassMemberService {
                     teacherName
             );
         }).filter(Objects::nonNull).toList();
+
+
+        // 🧩 2️⃣ Lớp mà tôi dạy (nếu là giáo viên)
+        List<ClassEntity> teachingClasses = classRepository.findByTeacherId(currentUserId);
+        List<ClassStudentResponse> teachingResponses = teachingClasses.stream()
+                .map(clazz -> new ClassStudentResponse(
+                        clazz.getClassId(),
+                        clazz.getClassName(),
+                        userRepository.findById(clazz.getTeacherId())
+                                .map(User::getFullName)
+                                .orElse("Unknown")
+                ))
+                .toList();
+
+
+        // ✅ 3️⃣ Trả kết quả gộp
+        result.put("teachingClasses", teachingResponses);
+        result.put("learningClasses", learningClasses);
+
+        return result;
     }
 
 

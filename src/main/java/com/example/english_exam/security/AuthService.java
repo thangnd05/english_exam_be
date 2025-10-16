@@ -162,13 +162,16 @@ public class AuthService {
 
     private void setAccessTokenCookie(String accessToken, HttpServletResponse response) {
         String cookieValue = URLEncoder.encode(accessToken, StandardCharsets.UTF_8);
-        int cookieMax = (int) ((jwtService.extractClaim(accessToken, Claims::getExpiration).getTime() - System.currentTimeMillis())/1000);
+        int cookieMax = (int) ((jwtService.extractClaim(accessToken, Claims::getExpiration).getTime() - System.currentTimeMillis()) / 1000);
         if (cookieMax <= 0) cookieMax = 3600;
 
         String setCookie = "accessToken=" + cookieValue +
-                "; HttpOnly; Path=/; Max-Age=" + cookieMax + "; SameSite=Strict; Secure";
+                "; HttpOnly; Path=/; Max-Age=" + cookieMax +
+                "; SameSite=None" +  // ✅ Cho phép cross-site
+                "; Secure";          // ⚠️ Giữ true nếu HTTPS, false nếu localhost
         response.addHeader("Set-Cookie", setCookie);
     }
+
 
     public Map<String, Object> register(RegisterRequest request) {
         if (userRepository.findByUserNameOrEmail(request.getUserName(), request.getEmail()).isPresent()) {

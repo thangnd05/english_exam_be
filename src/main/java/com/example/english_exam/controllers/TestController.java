@@ -42,11 +42,14 @@ public class TestController {
 
     // Lấy test theo id
     @GetMapping("/{id}")
-    public ResponseEntity<Test> getTestById(@PathVariable Long id) {
-        return testService.getTestById(id)
-                .map(ResponseEntity::ok)   // 200 OK
-                .orElse(ResponseEntity.notFound().build()); // 404 Not Found
+    public ResponseEntity<TestAdminResponse> getTestById(@PathVariable Long id) {
+        TestAdminResponse response = testService.getTestDetailForAdmin(id);
+        if (response == null) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(response);
     }
+
 
     @GetMapping("/usertest/{testId}")
     public ResponseEntity<TestResponse> getUserTest(
@@ -262,6 +265,19 @@ Bước 4: .toList() - Chuyển stream kết quả thành List
 
         return ResponseEntity.ok(tests.stream().map(TestResponse::new).toList());
     }
+
+    @PutMapping(value = "/{testId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<TestResponse> updateTestFromQuestionBank(
+            @PathVariable Long testId,
+            @RequestParam("data") String dataJson,
+            @RequestPart(value = "banner", required = false) MultipartFile bannerFile,
+            HttpServletRequest httpRequest
+    ) throws IOException {
+        TestRequest request = objectMapper.readValue(dataJson, TestRequest.class);
+        TestResponse response = testService.updateTestFromQuestionBank(testId, request, bannerFile, httpRequest);
+        return ResponseEntity.ok(response);
+    }
+
 
 
 

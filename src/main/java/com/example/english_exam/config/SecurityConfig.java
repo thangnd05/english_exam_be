@@ -5,6 +5,7 @@ import com.example.english_exam.security.JwtService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import jakarta.annotation.PostConstruct;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -22,6 +23,8 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.filter.CorsFilter;
+
+import java.util.List;
 
 @Configuration
 @EnableMethodSecurity(prePostEnabled = true)
@@ -81,14 +84,17 @@ public class SecurityConfig {
     }
 
     @Bean
-    public CorsFilter corsFilter(@org.springframework.beans.factory.annotation.Value("${app.frontend.origin}") String origin) {
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+    public CorsFilter corsFilter(@Value("${app.frontend.origin}") String origin) {
         CorsConfiguration config = new CorsConfiguration();
-        config.addAllowedOrigin(origin);
-        config.addAllowedHeader("*");
-        config.addAllowedMethod("*");
-        config.setAllowCredentials(true);
+        config.setAllowCredentials(true); // ✅ Cho phép cookie
+        config.setAllowedOrigins(List.of(origin)); // ✅ FE URL
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        config.setAllowedHeaders(List.of("*"));
+        config.setExposedHeaders(List.of("Set-Cookie")); // ⚠️ để FE nhận cookie từ header
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
         return new CorsFilter(source);
     }
+
 }

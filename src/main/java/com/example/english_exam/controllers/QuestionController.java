@@ -35,11 +35,15 @@ public class QuestionController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Question> getQuestionById(@PathVariable Long id) {
-        Optional<Question> question = questionService.findById(id);
-        return question.map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+    public ResponseEntity<QuestionAdminResponse> getQuestionById(@PathVariable Long id) {
+        try {
+            QuestionAdminResponse response = questionService.getQuestionDetailAdmin(id);
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
     }
+
 
     @GetMapping("/by-part/{examPartId}")
     public ResponseEntity<List<QuestionResponse>> getQuestionsByPart(
@@ -104,6 +108,35 @@ public class QuestionController {
                 questionService.createQuestionWithAnswersAdmin(request, httpRequest); // 🆕 truyền request
         return ResponseEntity.ok(response);
     }
+
+    /**
+     * ✏️ Cập nhật câu hỏi (có thể kèm passage & audio mới)
+     */
+    @PutMapping(
+            value = "/{id}",
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE
+    )
+    public ResponseEntity<?> updateQuestionWithPassage(
+            @PathVariable Long id,
+            @RequestParam("data") String dataJson,
+            @RequestPart(value = "audioFile", required = false) MultipartFile audioFile,
+            HttpServletRequest httpRequest
+    ) {
+        try {
+            QuestionRequest request = objectMapper.readValue(dataJson, QuestionRequest.class);
+
+            QuestionAdminResponse updated =
+                    questionService.updateQuestionWithPassage(id, request, audioFile, httpRequest);
+
+            return ResponseEntity.ok(updated);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity
+                    .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("❌ Error updating question: " + e.getMessage());
+        }
+    }
+
 
 
     // =================== DELETE ===================
