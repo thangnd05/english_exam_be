@@ -4,6 +4,8 @@ import com.example.english_exam.dto.request.PracticeCheckRequest;
 import com.example.english_exam.dto.response.PracticeCheckResponse;
 import com.example.english_exam.models.*;
 import com.example.english_exam.repositories.*;
+import com.example.english_exam.util.AuthUtils;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -17,8 +19,11 @@ public class PracticeCheckService {
     private final VocabularyRepository vocabularyRepository;
     private final UserVocabularyRepository userVocabularyRepository;
     private final PracticeOptionRepository practiceOptionRepository;
+    private final AuthUtils  authUtils;
 
-    public PracticeCheckResponse checkAnswer(PracticeCheckRequest request) {
+    public PracticeCheckResponse checkAnswer(PracticeCheckRequest request, HttpServletRequest httpRequest) {
+
+        Long currentUserId = authUtils.getUserId(httpRequest);
 
         PracticeQuestion question = practiceQuestionRepository.findById(request.getQuestionId())
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy câu hỏi"));
@@ -41,8 +46,8 @@ public class PracticeCheckService {
 
         // Lấy hoặc tạo UserVocabulary
         UserVocabulary uv = userVocabularyRepository
-                .findByUserIdAndVocabId(request.getUserId(), question.getVocabId())
-                .orElse(new UserVocabulary(null, request.getUserId(), question.getVocabId(),
+                .findByUserIdAndVocabId(currentUserId, question.getVocabId())
+                .orElse(new UserVocabulary(null, currentUserId, question.getVocabId(),
                         UserVocabulary.Status.learning, LocalDateTime.now(), 0));
 
         if (correct) {

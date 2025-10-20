@@ -4,6 +4,7 @@ import com.example.english_exam.dto.request.PracticeQuestionRequest;
 import com.example.english_exam.dto.response.PracticeQuestionResponse;
 import com.example.english_exam.services.LearningVoca.PracticeCheckService;
 import com.example.english_exam.services.LearningVoca.PracticeService;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -55,16 +56,18 @@ public class PracticeController {
     @GetMapping("/generate/{albumId}")
     public ResponseEntity<PracticeQuestionResponse> generateRandomQuestion(
             @PathVariable Long albumId,
-            @RequestParam Long userId) { // cần userId để lọc theo UserVocabulary
+            HttpServletRequest httpRequest
+    ) {
+        Optional<PracticeQuestionResponse> questionOpt =
+                practiceService.generateOneRandomQuestion(httpRequest, albumId);
 
-        Optional<PracticeQuestionResponse> questionOpt = practiceService.generateOneRandomQuestion(userId, albumId);
-
-        if (questionOpt.isPresent()) {
-            return ResponseEntity.ok(questionOpt.get());
-        } else {
-            // hết từ chưa mastered
-            return ResponseEntity.noContent().build();
+        // ✅ Nếu không có câu hỏi (user đã học hết)
+        if (questionOpt.isEmpty()) {
+            return ResponseEntity.noContent().build(); // trả 204 No Content
         }
+
+        // ✅ Nếu có câu hỏi
+        return ResponseEntity.ok(questionOpt.get());
     }
 
 }

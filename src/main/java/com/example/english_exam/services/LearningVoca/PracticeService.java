@@ -7,6 +7,9 @@ import com.example.english_exam.dto.response.PracticeOptionResponse;
 import com.example.english_exam.dto.response.PracticeQuestionResponse;
 import com.example.english_exam.models.*;
 import com.example.english_exam.repositories.*;
+import com.example.english_exam.util.AuthUtils;
+import jakarta.servlet.http.HttpServletRequest;
+import lombok.AllArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -14,6 +17,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
+@AllArgsConstructor
 public class PracticeService {
 
     @Autowired
@@ -34,6 +38,8 @@ public class PracticeService {
     private PracticeOptionRepository practiceOptionRepository;
     @Autowired
     private UserVocabularyRepository  userVocabularyRepository;
+
+    private final AuthUtils  authUtils;
 
     // ============================= CRUD CƠ BẢN =============================
 
@@ -148,96 +154,12 @@ public class PracticeService {
                 });
     }
 
-    // ============================= RANDOM THEO ALBUM =============================
+    public Optional<PracticeQuestionResponse> generateOneRandomQuestion(HttpServletRequest httpRequest, Long albumId) {
 
-//    public List<PracticeQuestionResponse> generatePracticeQuestionsForAlbum(Long albumId) {
-//        List<Vocabulary> vocabularies = vocabularyRepository.findByAlbumId(albumId);
-//        int total = vocabularies.size();
-//        if (total == 0) return Collections.emptyList();
-//
-//        // Chia đều cho 3 loại
-//        int perType = total / 2;
-//        int remainder = total % 2;
-//
-//        List<PracticeQuestion.QuestionType> types = new ArrayList<>();
-//        for (int i = 0; i < perType; i++) types.add(PracticeQuestion.QuestionType.MULTICHOICE);
-//        for (int i = 0; i < perType; i++) types.add(PracticeQuestion.QuestionType.LISTENING_EN);
-//
-//        Random rand = new Random();
-//        for (int i = 0; i < remainder; i++) {
-//            int r = rand.nextInt(3);
-//            if (r == 0) types.add(PracticeQuestion.QuestionType.MULTICHOICE);
-//            else if (r == 1) types.add(PracticeQuestion.QuestionType.LISTENING_EN);
-//        }
-//
-//        Collections.shuffle(types);
-//
-//        List<PracticeQuestionResponse> responses = new ArrayList<>();
-//        for (int i = 0; i < vocabularies.size(); i++) {
-//            Vocabulary vocab = vocabularies.get(i);
-//            PracticeQuestion.QuestionType type = types.get(i);
-//
-//            PracticeQuestion question = new PracticeQuestion();
-//            question.setVocabId(vocab.getVocabId());
-//            question.setType(type);
-//            question.setQuestionText(type == PracticeQuestion.QuestionType.MULTICHOICE
-//                    ? "Chọn nghĩa đúng của từ: " + vocab.getWord()
-//                    : "Nghe/viết lại từ: " + vocab.getMeaning());
-//
-//            PracticeQuestion saved = questionRepository.save(question);
-//
-//            List<PracticeOptionResponse> optionResponses = null;
-//            if (type == PracticeQuestion.QuestionType.MULTICHOICE) {
-//                List<Vocabulary> distractors = vocabularies.stream()
-//                        .filter(v -> !v.getVocabId().equals(vocab.getVocabId()))
-//                        .limit(3)
-//                        .collect(Collectors.toList());
-//
-//                List<PracticeOption> options = new ArrayList<>();
-//                options.add(new PracticeOption(null, saved.getId(), vocab.getMeaning(), true));
-//                for (Vocabulary d : distractors) {
-//                    options.add(new PracticeOption(null, saved.getId(), d.getMeaning(), false));
-//                }
-//
-//                List<PracticeOption> savedOptions = optionRepository.saveAll(options);
-//
-//                optionResponses = savedOptions.stream()
-//                        .map(o -> new PracticeOptionResponse(o.getId(), o.getOptionText()))
-//                        .collect(Collectors.toList());
-//            }
-//
-//            PracticeAnswerResponse answerResponse = null;
-//            if (type == PracticeQuestion.QuestionType.LISTENING_EN) {
-//                PracticeAnswer ans = new PracticeAnswer();
-//                ans.setPracticeQuestionId(saved.getId());
-//                ans.setCorrectEnglish(vocab.getWord());
-//                ans.setCorrectVietnamese(vocab.getMeaning());
-//
-//                PracticeAnswer savedAns = answerRepository.save(ans);
-//
-//                answerResponse = new PracticeAnswerResponse(
-//                        savedAns.getCorrectEnglish(),
-//                        savedAns.getCorrectVietnamese()
-//                );
-//            }
-//
-//            responses.add(new PracticeQuestionResponse(
-//                    saved.getId(),
-//                    saved.getVocabId(),
-//                    saved.getType(),
-//                    saved.getQuestionText(),
-//                    vocab.getVoiceUrl(),
-//                    optionResponses,
-//                    answerResponse
-//            ));
-//        }
-//
-//        return responses;
-//    }
+        Long currentUserId = authUtils.getUserId(httpRequest);
 
-    public Optional<PracticeQuestionResponse> generateOneRandomQuestion(Long userId, Long albumId) {
         // 1. Lấy danh sách vocabId đã mastered của user trong album
-        List<Long> masteredIds = userVocabularyRepository.findMasteredVocabIdsByUserIdAndAlbumId(userId, albumId);
+        List<Long> masteredIds = userVocabularyRepository.findMasteredVocabIdsByUserIdAndAlbumId(currentUserId, albumId);
 
         // 2. Lấy tất cả từ trong album
         List<Vocabulary> vocabularies = vocabularyRepository.findByAlbumId(albumId);
