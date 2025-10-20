@@ -2,13 +2,14 @@ package com.example.english_exam.controllers;
 
 import com.example.english_exam.models.VocabularyAlbum;
 import com.example.english_exam.services.LearningVoca.VocabularyAlbumService;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/albums")
+@RequestMapping("/api/vocabulary-albums")
 public class VocabularyAlbumController {
     private final VocabularyAlbumService service;
 
@@ -43,5 +44,11 @@ public class VocabularyAlbumController {
         return service.delete(id)
                 ? ResponseEntity.noContent().build()
                 : ResponseEntity.notFound().build();
+    }
+
+    @GetMapping("/my-albums")
+    public ResponseEntity<List<VocabularyAlbum>> getMyAlbums(HttpServletRequest request) {
+        List<VocabularyAlbum> albums = service.findAllByUserId(request);
+        return ResponseEntity.ok(albums);
     }
 }

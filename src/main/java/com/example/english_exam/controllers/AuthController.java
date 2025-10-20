@@ -1,4 +1,3 @@
-// src/main/java/com/example/english_exam/controllers/AuthController.java
 package com.example.english_exam.controllers;
 
 import com.example.english_exam.dto.request.LoginRequest;

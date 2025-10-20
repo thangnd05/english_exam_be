@@ -4,13 +4,14 @@ import com.example.english_exam.dto.request.VocabularyRequest;
 import com.example.english_exam.dto.response.VocabularyResponse;
 import com.example.english_exam.models.Vocabulary;
 import com.example.english_exam.services.LearningVoca.VocabularyService;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/vocabulary")
+@RequestMapping("/api/vocabularies")
 public class VocabularyController {
     private final VocabularyService service;
 
@@ -48,4 +49,14 @@ public class VocabularyController {
                 ? ResponseEntity.noContent().build()
                 : ResponseEntity.notFound().build();
     }
+
+    @GetMapping("/album/{albumId}")
+    public ResponseEntity<List<Vocabulary>> getVocabulariesByAlbumId(
+            @PathVariable Long albumId,
+            HttpServletRequest request
+    ) {
+        List<Vocabulary> vocabularies = service.findAllByAlbumId(albumId, request);
+        return ResponseEntity.ok(vocabularies);
+    }
+
 }

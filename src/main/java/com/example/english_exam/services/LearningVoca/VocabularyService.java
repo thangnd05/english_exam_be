@@ -4,30 +4,34 @@ package com.example.english_exam.services.LearningVoca;
 import com.example.english_exam.dto.request.VocabularyRequest;
 import com.example.english_exam.dto.response.VocabularyResponse;
 import com.example.english_exam.models.DictionaryResult;
+import com.example.english_exam.models.User;
 import com.example.english_exam.models.Vocabulary;
 import com.example.english_exam.models.VocabularyAlbum;
+import com.example.english_exam.repositories.UserRepository;
 import com.example.english_exam.repositories.VocabularyAlbumRepository;
 import com.example.english_exam.repositories.VocabularyRepository;
 import com.example.english_exam.services.ApiExtend.DictionaryApiService;
 import com.example.english_exam.services.ApiExtend.TextToSpeechService;
+import com.example.english_exam.util.AuthUtils;
+import jakarta.servlet.http.HttpServletRequest;
+import lombok.AllArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Optional;
 
 @Service
+@AllArgsConstructor
 public class VocabularyService {
     private final VocabularyRepository repository;
     private final VocabularyAlbumRepository albumRepository;
     private final DictionaryApiService dictionaryApiService;
     private final TextToSpeechService textToSpeechService;
+    private final AuthUtils  authUtils;
+    private final UserRepository userRepository;
 
-    public VocabularyService(VocabularyRepository repository, VocabularyAlbumRepository albumRepository, DictionaryApiService dictionaryApiService, TextToSpeechService textToSpeechService) {
-        this.repository = repository;
-        this.albumRepository = albumRepository;
-        this.dictionaryApiService = dictionaryApiService;
-        this.textToSpeechService = textToSpeechService;
-    }
+
 
     public List<Vocabulary> findAll() {
         return repository.findAll();
@@ -103,6 +107,25 @@ public class VocabularyService {
         response.setCreatedAt(vocab.getCreatedAt());
 
         return response;
+    }
+
+    public List<Vocabulary> findAllByAlbumId(Long albumId, HttpServletRequest request) {
+        // ✅ Lấy user hiện tại từ token
+        Long currentUserId = authUtils.getUserId(request);
+
+        // ✅ Kiểm tra album có tồn tại không
+        VocabularyAlbum album = albumRepository.findById(albumId)
+                .orElseThrow(() -> new RuntimeException("Album không tồn tại"));
+
+
+
+        // ✅ Chỉ người tạo album mới xem được
+        if (!album.getUserId().equals(currentUserId)) {
+            throw new AccessDeniedException("Bạn không có quyền truy cập album này!");
+        }
+
+        // ✅ Trả danh sách từ vựng trong album
+        return repository.findByAlbumId(albumId);
     }
 }
 
