@@ -1,28 +1,16 @@
 package com.example.english_exam.dto.response;
 
-import com.example.english_exam.models.PracticeQuestion;
 import lombok.*;
 
 import java.util.List;
 
-@Data
-@NoArgsConstructor
+@Getter @Setter @NoArgsConstructor @AllArgsConstructor
 public class PracticeQuestionResponse {
-    private Long id;
     private Long vocabId;
-    private PracticeQuestion.QuestionType type;
+    private String type; // MULTICHOICE hoặc LISTENING_EN
     private String questionText;
-    private String audioUrl; // chỉ dùng cho LISTENING
-    private List<PracticeOptionResponse> options;
-    private PracticeAnswerResponse answer;
-
-    public PracticeQuestionResponse(Long id, Long vocabId, PracticeQuestion.QuestionType type, String questionText, String audioUrl, List<PracticeOptionResponse> options, PracticeAnswerResponse answer) {
-        this.id = id;
-        this.vocabId = vocabId;
-        this.type = type;
-        this.questionText = questionText;
-        this.audioUrl = audioUrl;
-        this.options = options;
-        this.answer = answer;
-    }
+    private String voiceUrl;
+    private String word;
+    private String meaning;
+    private List<String> options; // 4 đáp án nghĩa
 }

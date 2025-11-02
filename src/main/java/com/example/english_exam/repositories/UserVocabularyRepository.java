@@ -30,5 +30,7 @@ public interface UserVocabularyRepository extends JpaRepository<UserVocabulary, 
     List<Long> findMasteredVocabIdsByUserIdAndAlbumId(@Param("userId") Long userId, @Param("albumId") Long albumId);
 
 
+    @Query("SELECT uv.vocabId FROM UserVocabulary uv WHERE uv.userId = :userId AND uv.status = :status")
+    List<Long> findVocabIdsByUserIdAndStatus(@Param("userId") Long userId, @Param("status") UserVocabulary.Status status);
 
 }

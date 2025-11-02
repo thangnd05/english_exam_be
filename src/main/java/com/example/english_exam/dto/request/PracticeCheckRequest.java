@@ -1,15 +1,13 @@
 package com.example.english_exam.dto.request;
 
-import lombok.*;
+import lombok.Getter;
+import lombok.Setter;
 
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
+@Getter @Setter
 public class PracticeCheckRequest {
-    private Long questionId;
-    private String userEnglish;   // người dùng nhập từ tiếng Anh
-    private String userVietnamese; // người dùng nhập nghĩa tiếng Việt
-    private Long selectedOptionId;
-
+    private Long vocabId;
+    private String type; // MULTICHOICE / LISTENING_EN
+    private String selectedOptionText; // nếu MULTICHOICE
+    private String userEnglish; // nếu LISTENING_EN
+    private String userVietnamese; // nếu LISTENING_EN
 }
