@@ -13,6 +13,8 @@ public class PracticeOptionResponse {
     private boolean isCorrect;
 
     public PracticeOptionResponse(Long id, String optionText) {
+        this.id = id;
+        this.optionText = optionText;
     }
 }
 

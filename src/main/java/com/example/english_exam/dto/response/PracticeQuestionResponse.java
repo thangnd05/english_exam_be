@@ -7,7 +7,6 @@ import java.util.List;
 
 @Data
 @NoArgsConstructor
-@AllArgsConstructor
 public class PracticeQuestionResponse {
     private Long id;
     private Long vocabId;
@@ -17,6 +16,13 @@ public class PracticeQuestionResponse {
     private List<PracticeOptionResponse> options;
     private PracticeAnswerResponse answer;
 
-    public PracticeQuestionResponse(Long id, Long vocabId, PracticeQuestion.QuestionType type, String questionText, List<PracticeOptionResponse> optionResponses, PracticeAnswerResponse answerResponse) {
+    public PracticeQuestionResponse(Long id, Long vocabId, PracticeQuestion.QuestionType type, String questionText, String audioUrl, List<PracticeOptionResponse> options, PracticeAnswerResponse answer) {
+        this.id = id;
+        this.vocabId = vocabId;
+        this.type = type;
+        this.questionText = questionText;
+        this.audioUrl = audioUrl;
+        this.options = options;
+        this.answer = answer;
     }
 }

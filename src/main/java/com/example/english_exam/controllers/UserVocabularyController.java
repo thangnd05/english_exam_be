@@ -44,4 +44,10 @@ public class UserVocabularyController {
                 ? ResponseEntity.noContent().build()
                 : ResponseEntity.notFound().build();
     }
+
+    @DeleteMapping("/delete-all")
+    public ResponseEntity<String> deleteAll() {
+        service.deleteAllUserVocabulary();
+        return ResponseEntity.ok("Đã xóa toàn bộ dữ liệu trong bảng user_vocabulary!");
+    }
 }

@@ -70,5 +70,13 @@ public class PracticeController {
         return ResponseEntity.ok(questionOpt.get());
     }
 
+    @PostMapping("/mark-known/{vocabId}")
+    public ResponseEntity<?> markWordKnown(@PathVariable Long vocabId, HttpServletRequest httpRequest) {
+        practiceService.markWordAsKnown(httpRequest, vocabId);
+        return ResponseEntity.ok("Đã đánh dấu từ này là đã biết");
+    }
+
+
+
 }
 

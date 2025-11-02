@@ -13,6 +13,8 @@ public class PracticeAnswerResponse {
     private String correctVietnamese;
 
     public PracticeAnswerResponse(String correctEnglish, String correctVietnamese) {
+        this.correctEnglish = correctEnglish;
+        this.correctVietnamese = correctVietnamese;
     }
 }
 

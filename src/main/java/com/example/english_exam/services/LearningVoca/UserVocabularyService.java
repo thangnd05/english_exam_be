@@ -33,4 +33,8 @@ public class UserVocabularyService {
             return true;
         }).orElse(false);
     }
+
+    public void deleteAllUserVocabulary() {
+        repository.deleteAll(); // ✅ Gọi phương thức xóa toàn bộ
+    }
 }

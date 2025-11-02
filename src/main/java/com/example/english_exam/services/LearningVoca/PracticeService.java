@@ -10,12 +10,15 @@ import com.example.english_exam.repositories.*;
 import com.example.english_exam.util.AuthUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.AllArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @AllArgsConstructor
 public class PracticeService {
@@ -33,13 +36,11 @@ public class PracticeService {
     private VocabularyRepository vocabularyRepository;
 
     @Autowired
-    private PracticeQuestionRepository practiceQuestionRepository;
-    @Autowired
     private PracticeOptionRepository practiceOptionRepository;
     @Autowired
-    private UserVocabularyRepository  userVocabularyRepository;
+    private UserVocabularyRepository userVocabularyRepository;
 
-    private final AuthUtils  authUtils;
+    private final AuthUtils authUtils;
 
     // ============================= CRUD CƠ BẢN =============================
 
@@ -155,46 +156,51 @@ public class PracticeService {
     }
 
     public Optional<PracticeQuestionResponse> generateOneRandomQuestion(HttpServletRequest httpRequest, Long albumId) {
-
         Long currentUserId = authUtils.getUserId(httpRequest);
 
-        // 1. Lấy danh sách vocabId đã mastered của user trong album
+        // 1️⃣ Lấy danh sách vocab đã mastered
         List<Long> masteredIds = userVocabularyRepository.findMasteredVocabIdsByUserIdAndAlbumId(currentUserId, albumId);
 
-        // 2. Lấy tất cả từ trong album
+        // 2️⃣ Lấy tất cả vocab trong album
         List<Vocabulary> vocabularies = vocabularyRepository.findByAlbumId(albumId);
 
-        // 3. Lọc ra những từ chưa mastered
+        // 3️⃣ Lọc vocab chưa mastered
         List<Vocabulary> availableVocabs = vocabularies.stream()
                 .filter(v -> !masteredIds.contains(v.getVocabId()))
                 .collect(Collectors.toList());
 
-        if (availableVocabs.isEmpty()) return Optional.empty(); // hết từ chưa học
+        if (availableVocabs.isEmpty()) return Optional.empty();
 
-        // 4. Chọn random 1 từ
+        // 4️⃣ Random 1 vocab
         Random rand = new Random();
         Vocabulary vocab = availableVocabs.get(rand.nextInt(availableVocabs.size()));
 
-        // 5. Chọn random type
+        // 5️⃣ Random loại câu hỏi
         PracticeQuestion.QuestionType type = rand.nextBoolean()
                 ? PracticeQuestion.QuestionType.MULTICHOICE
                 : PracticeQuestion.QuestionType.LISTENING_EN;
 
-        // 6. Tạo PracticeQuestion
+        // 6️⃣ Tạo câu hỏi
         PracticeQuestion question = new PracticeQuestion();
         question.setVocabId(vocab.getVocabId());
         question.setType(type);
-        question.setQuestionText(type == PracticeQuestion.QuestionType.MULTICHOICE
-                ? "Chọn nghĩa đúng của từ: " + vocab.getWord()
-                : "Nghe/viết lại từ: " + vocab.getMeaning());
+
+        if (type == PracticeQuestion.QuestionType.MULTICHOICE) {
+            // MULTICHOICE: hiển thị từ tiếng Anh, chọn nghĩa tiếng Việt
+            question.setQuestionText("Chọn nghĩa đúng của từ: " + vocab.getWord());
+        } else {
+            // LISTENING_EN: chỉ nghe, không hiện nghĩa
+            question.setQuestionText("Nghe và nhập lại từ đã nghe");
+        }
 
         PracticeQuestion saved = questionRepository.save(question);
 
-        // 7. Tạo options/answer
+        // 7️⃣ Tạo đáp án / options
         List<PracticeOptionResponse> optionResponses = null;
         PracticeAnswerResponse answerResponse = null;
 
         if (type == PracticeQuestion.QuestionType.MULTICHOICE) {
+            // ✅ MULTICHOICE: 1 đáp án đúng + 3 sai
             List<Vocabulary> distractors = vocabularies.stream()
                     .filter(v -> !v.getVocabId().equals(vocab.getVocabId()))
                     .limit(3)
@@ -202,15 +208,18 @@ public class PracticeService {
 
             List<PracticeOption> options = new ArrayList<>();
             options.add(new PracticeOption(null, saved.getId(), vocab.getMeaning(), true));
+
             for (Vocabulary d : distractors) {
                 options.add(new PracticeOption(null, saved.getId(), d.getMeaning(), false));
             }
 
+            Collections.shuffle(options);
             List<PracticeOption> savedOptions = practiceOptionRepository.saveAll(options);
             optionResponses = savedOptions.stream()
                     .map(o -> new PracticeOptionResponse(o.getId(), o.getOptionText()))
                     .collect(Collectors.toList());
         } else {
+            // ✅ LISTENING_EN
             PracticeAnswer ans = new PracticeAnswer();
             ans.setPracticeQuestionId(saved.getId());
             ans.setCorrectEnglish(vocab.getWord());
@@ -223,6 +232,7 @@ public class PracticeService {
             );
         }
 
+        // 8️⃣ Trả kết quả
         return Optional.of(new PracticeQuestionResponse(
                 saved.getId(),
                 saved.getVocabId(),
@@ -235,5 +245,18 @@ public class PracticeService {
     }
 
 
+    public void markWordAsKnown(HttpServletRequest httpRequest, Long vocabId) {
+        Long currentUserId = authUtils.getUserId(httpRequest);
+
+        UserVocabulary uv = userVocabularyRepository.findByUserIdAndVocabId(currentUserId, vocabId)
+                .orElse(new UserVocabulary(currentUserId, vocabId));
+
+        uv.setStatus(UserVocabulary.Status.mastered);
+        uv.setCorrectCount(5);
+        uv.setLastReviewed(LocalDateTime.now());
+
+        userVocabularyRepository.save(uv);
+    }
 
 }
+

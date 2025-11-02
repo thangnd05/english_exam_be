@@ -27,6 +27,11 @@ public class UserVocabulary {
     private LocalDateTime lastReviewed = LocalDateTime.now();
     private int correctCount = 0; // số lần trả lời đúng liên tiếp
 
+    public UserVocabulary(Long currentUserId, Long vocabId) {
+        this.userId = currentUserId;
+        this.vocabId = vocabId;
+    }
+
 
     public enum Status {
         learning,

@@ -2,20 +2,22 @@ package com.example.english_exam.controllers;
 
 import com.example.english_exam.models.VocabularyAlbum;
 import com.example.english_exam.services.LearningVoca.VocabularyAlbumService;
+import com.example.english_exam.services.LearningVoca.VocabularyService;
+import com.example.english_exam.util.AuthUtils;
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.AllArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 @RestController
+@AllArgsConstructor
 @RequestMapping("/api/vocabulary-albums")
 public class VocabularyAlbumController {
     private final VocabularyAlbumService service;
+    private final AuthUtils authUtils;
 
-    public VocabularyAlbumController(VocabularyAlbumService service) {
-        this.service = service;
-    }
 
     @GetMapping
     public ResponseEntity<List<VocabularyAlbum>> getAll() {
@@ -29,9 +31,16 @@ public class VocabularyAlbumController {
     }
 
     @PostMapping
-    public ResponseEntity<VocabularyAlbum> create(@RequestBody VocabularyAlbum album) {
-        return ResponseEntity.ok(service.save(album));
+    public ResponseEntity<VocabularyAlbum> create(
+            @RequestBody VocabularyAlbum album,
+            HttpServletRequest request
+    ) {
+        Long userId = authUtils.getUserId(request);
+        album.setUserId(userId);
+        VocabularyAlbum saved = service.save(album);
+        return ResponseEntity.ok(saved);
     }
+
 
     @PutMapping("/{id}")
     public ResponseEntity<VocabularyAlbum> update(@PathVariable Long id, @RequestBody VocabularyAlbum album) {

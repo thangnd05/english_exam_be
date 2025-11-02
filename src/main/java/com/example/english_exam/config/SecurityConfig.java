@@ -54,6 +54,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/user-answers/**").permitAll()
                         .requestMatchers("/api/exam-types/**").permitAll()
                         .requestMatchers("/api/classes/**").permitAll()
+                        .requestMatchers("/api/tts/**").permitAll() // ✅ thêm dòng này
+
 
                         .requestMatchers("/uploads/**").permitAll() // <-- Vẫn cần thêm dòng này
                         .anyRequest().authenticated()
