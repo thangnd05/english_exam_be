@@ -10,22 +10,44 @@ import java.util.Map;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    // 🔹 Lỗi gửi mail (smtp.gmail.com lỗi)
+    // 🔹 Lỗi gửi mail (SMTP)
     @ExceptionHandler(MailException.class)
     public Map<String, Object> handleMailException(MailException ex) {
+        // In lỗi chi tiết ra console
+        ex.printStackTrace();
+
         return Map.of(
                 "status", HttpStatus.SERVICE_UNAVAILABLE.value(),
                 "message", "Không thể kết nối đến máy chủ email. Vui lòng thử lại sau.",
+                "error", ex.getClass().getSimpleName(),
+                "details", ex.getMessage() // 🧩 thêm dòng này để FE xem chi tiết
+        );
+    }
+
+    // 🔹 Lỗi logic chung (vd: username hoặc email đã tồn tại, chưa verify, sai mật khẩu...)
+    @ExceptionHandler(RuntimeException.class)
+    public Map<String, Object> handleRuntimeException(RuntimeException ex) {
+        // Ghi log rõ ràng hơn
+        System.err.println("❌ RuntimeException: " + ex.getMessage());
+        ex.printStackTrace();
+
+        return Map.of(
+                "status", HttpStatus.BAD_REQUEST.value(),
+                "message", ex.getMessage(),
                 "error", ex.getClass().getSimpleName()
         );
     }
 
-    // 🔹 Lỗi logic chung (vd: username hoặc email đã tồn tại)
-    @ExceptionHandler(RuntimeException.class)
-    public Map<String, Object> handleRuntimeException(RuntimeException ex) {
+    // 🔹 Bắt tất cả lỗi còn lại
+    @ExceptionHandler(Exception.class)
+    public Map<String, Object> handleAllExceptions(Exception ex) {
+        System.err.println("🔥 Unhandled Exception: " + ex.getMessage());
+        ex.printStackTrace();
+
         return Map.of(
-                "status", HttpStatus.BAD_REQUEST.value(),
-                "message", ex.getMessage()
+                "status", HttpStatus.INTERNAL_SERVER_ERROR.value(),
+                "message", "Lỗi hệ thống! Vui lòng thử lại sau.",
+                "error", ex.getClass().getSimpleName()
         );
     }
 }

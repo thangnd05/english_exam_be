@@ -41,6 +41,8 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final RoleRepository roleRepository;
     private final EmailVerificationService emailVerificationService;
+    private final EmailVerificationRepository emailVerificationRepository; // ✅ thêm dòng này
+
 
 
 
@@ -154,11 +156,25 @@ public class AuthService {
 
     @Transactional
     public Map<String, Object> register(RegisterRequest request) {
+        // 1️⃣ Kiểm tra username
         if (userRepository.findByUserName(request.getUserName()).isPresent())
             throw new RuntimeException("Tên đăng nhập đã tồn tại");
-        if (userRepository.findByEmail(request.getEmail()).isPresent())
-            throw new RuntimeException("Email đã được sử dụng");
 
+        // 2️⃣ Kiểm tra email
+        Optional<User> existing = userRepository.findByEmail(request.getEmail());
+        if (existing.isPresent()) {
+            User existUser = existing.get();
+            if (existUser.getVerified()) {
+                throw new RuntimeException("Email đã được sử dụng");
+            } else {
+                // 🧹 Xóa user chưa xác thực
+                emailVerificationRepository.deleteByUserId(existUser.getUserId());
+                userRepository.delete(existUser);
+                System.out.println("🧹 Xóa user chưa xác thực để đăng ký lại: " + existUser.getEmail());
+            }
+        }
+
+        // 3️⃣ Tạo user mới
         User user = new User();
         user.setUserName(request.getUserName());
         user.setFullName(request.getFullName());
@@ -171,11 +187,18 @@ public class AuthService {
         user.setRoleId(userRole.getRoleId());
         userRepository.save(user);
 
-        // ✅ gọi service gửi mail xác thực
-        emailVerificationService.createVerification(user);
+        // 4️⃣ Gửi mail xác thực
+        try {
+            emailVerificationService.createVerification(user);
+        } catch (Exception e) {
+            // Gửi mail lỗi → rollback luôn
+            userRepository.delete(user);
+            throw new RuntimeException("Không thể gửi email xác thực. Vui lòng kiểm tra địa chỉ email.");
+        }
 
         return Map.of("message", "Đăng ký thành công! Vui lòng kiểm tra email để xác thực tài khoản.");
     }
+
 
     public UserTokenInfo getCurrentUserInfo(HttpServletRequest request) {
         try {

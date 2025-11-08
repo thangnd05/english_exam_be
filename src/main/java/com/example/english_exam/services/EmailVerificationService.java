@@ -33,6 +33,10 @@ public class EmailVerificationService {
      */
     @Transactional
     public void createVerification(User user) {
+
+        if (Boolean.TRUE.equals(user.getVerified())) {
+            throw new RuntimeException("Email đã được xác thực để sử dụng vui lòng dùng email khác để đăng ký.");
+        }
         try {
             String token = UUID.randomUUID().toString();
             LocalDateTime expiry = LocalDateTime.now().plusHours(24);
