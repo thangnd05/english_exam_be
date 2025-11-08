@@ -1,7 +1,6 @@
 package com.example.english_exam.dto.response.user;
 
 import com.example.english_exam.models.Test;
-import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.*;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -20,21 +19,19 @@ public class TestResponse {
     private String bannerUrl;
     private Integer durationMinutes;
     private LocalDateTime availableFrom;
-
     private LocalDateTime availableTo;
 
     private String status;
     private Integer maxAttempts;
     private Integer attemptsUsed;
-    private Integer remainingAttempts; // thêm
+    private Integer remainingAttempts;
 
-
-
+    // ✅ Thêm mới:
+    private Boolean canDoTest; // cho biết user còn quyền làm bài không
 
     private List<TestPartResponse> parts;
 
     public TestResponse(Test test) {
-        // Sao chép dữ liệu từ đối tượng 'test' được truyền vào
         this.testId = test.getTestId();
         this.title = test.getTitle();
         this.description = test.getDescription();
@@ -48,11 +45,10 @@ public class TestResponse {
         this.status = test.calculateStatus().name();
         this.maxAttempts = test.getMaxAttempts();
 
-        // Đối với người dùng chưa đăng nhập, các trường này sẽ là null
+        // mặc định khi load (nếu chưa có giới hạn)
         this.attemptsUsed = null;
         this.remainingAttempts = null;
-        this.parts = null; // Hoặc bạn có thể map sang parts công khai nếu cần
+        this.canDoTest = true; // mặc định được phép
+        this.parts = null;
     }
-
-
 }

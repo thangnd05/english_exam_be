@@ -4,14 +4,20 @@ package com.example.english_exam.security;
 import com.example.english_exam.dto.auth.UserTokenInfo;
 import com.example.english_exam.dto.request.RegisterRequest;
 import com.example.english_exam.dto.response.AuthResponse;
+import com.example.english_exam.models.EmailVerification;
 import com.example.english_exam.models.Role;
 import com.example.english_exam.models.User;
+import com.example.english_exam.repositories.EmailVerificationRepository;
 import com.example.english_exam.repositories.RoleRepository;
 import com.example.english_exam.repositories.UserRepository;
 import com.example.english_exam.config.CustomUserDetailsService;
+import com.example.english_exam.services.EmailVerificationService;
 import io.jsonwebtoken.Claims;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.transaction.Transactional;
+import lombok.AllArgsConstructor;
+import lombok.NoArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -21,9 +27,11 @@ import org.springframework.stereotype.Service;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
 import java.util.*;
 
 @Service
+@AllArgsConstructor
 public class AuthService {
 
     private final AuthenticationManager authenticationManager;
@@ -32,20 +40,16 @@ public class AuthService {
     private final JwtService jwtService;
     private final PasswordEncoder passwordEncoder;
     private final RoleRepository roleRepository;
+    private final EmailVerificationService emailVerificationService;
 
-    public AuthService(AuthenticationManager authenticationManager, UserRepository userRepository, CustomUserDetailsService customUserDetailsService, JwtService jwtService, PasswordEncoder passwordEncoder, RoleRepository roleRepository) {
-        this.authenticationManager = authenticationManager;
-        this.userRepository = userRepository;
-        this.customUserDetailsService = customUserDetailsService;
-        this.jwtService = jwtService;
-        this.passwordEncoder = passwordEncoder;
-        this.roleRepository = roleRepository;
-    }
+
+
 
     // src/main/java/com/example/english_exam/security/AuthService.java
 
     public Map<String, Object> login(String identifier, String password, HttpServletResponse response) {
         try {
+            // 🧩 Xác thực username/email + password
             authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(identifier, password)
             );
@@ -53,74 +57,48 @@ public class AuthService {
             throw new RuntimeException("Thông tin đăng nhập không đúng");
         }
 
-        UserDetails userDetails = customUserDetailsService.loadUserByUsername(identifier);
-        User user = userRepository.findByUserNameOrEmail(identifier, identifier)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+        // 🔍 Tìm user theo username hoặc email
+        User user = userRepository.findByUserName(identifier)
+                .or(() -> userRepository.findByEmail(identifier))
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng"));
 
+        // 🚫 Kiểm tra xác thực email
+        if (!user.getVerified()) {
+            throw new RuntimeException("Tài khoản chưa được xác thực. Vui lòng kiểm tra email để kích hoạt tài khoản.");
+        }
+
+        // 🧠 Lấy thông tin chi tiết user (phục vụ cho token)
+        UserDetails userDetails = customUserDetailsService.loadUserByUsername(identifier);
+
+        // 🪙 Thêm thông tin bổ sung vào token
         Map<String, Object> claims = new HashMap<>();
         claims.put("userId", user.getUserId());
         claims.put("roleId", user.getRoleId());
 
+        // 🔐 Sinh access token & refresh token
         String accessToken = jwtService.generateToken(userDetails, claims);
         String refreshToken = jwtService.generateRefreshToken(userDetails);
 
+        // 🍪 Lưu accessToken vào cookie (HttpOnly)
         setAccessTokenCookie(accessToken, response);
 
-        // --- SỬA Ở ĐÂY ---
-        // Tạo một Map chứa thông tin user để trả về
+        // 🧾 Chuẩn bị dữ liệu user trả về FE
         Map<String, Object> userResponse = Map.of(
                 "id", user.getUserId(),
                 "username", user.getUserName(),
                 "email", user.getEmail(),
-                "roleId", user.getRoleId() // Có thể thêm role name nếu cần
+                "roleId", user.getRoleId(),
+                "verified", user.getVerified()
         );
 
-        // Trả về cả message, refreshToken và object user
+        // ✅ Trả về response cho FE
         return Map.of(
                 "message", "Đăng nhập thành công",
                 "refreshToken", refreshToken,
-                "user", userResponse // Thêm object user vào response
+                "user", userResponse
         );
     }
 
-    // hiển thị token khi refresh để test
-//    public AuthResponse refresh(String refreshToken, HttpServletResponse response) {
-//        String username = jwtService.extractUsername(refreshToken);
-//        if (username == null || !jwtService.isRefreshToken(refreshToken)) {
-//            throw new RuntimeException("Refresh token không hợp lệ");
-//        }
-//
-//        User user = userRepository.findByUserNameOrEmail(username, username)
-//                .orElseThrow(() -> new RuntimeException("User not found"));
-//
-//        UserDetails userDetails = new org.springframework.security.core.userdetails.User(
-//                user.getEmail(), user.getPassword(), new java.util.ArrayList<>()
-//        );
-//
-//        if (!jwtService.isTokenValid(refreshToken, userDetails)) {
-//            throw new RuntimeException("Refresh token hết hạn hoặc không hợp lệ");
-//        }
-//
-//        // Sinh access token mới
-//        Map<String, Object> claims = new HashMap<>();
-//        claims.put("userId", user.getUserId());
-//        claims.put("roleId", user.getRoleId());
-//
-//        String newAccessToken = jwtService.generateToken(userDetails, claims);
-//
-//        // Set cookie accessToken mới
-//        String cookieValue = URLEncoder.encode(newAccessToken, StandardCharsets.UTF_8);
-//        int cookieMax = (int) ((jwtService.extractClaim(newAccessToken, c -> c.getExpiration()).getTime()
-//                - System.currentTimeMillis()) / 1000);
-//        if (cookieMax <= 0) cookieMax = 3600;
-//
-//        String setCookie = "accessToken=" + cookieValue +
-//                "; HttpOnly; Path=/; Max-Age=" + cookieMax + "; SameSite=Strict; Secure";
-//        response.addHeader("Set-Cookie", setCookie);
-//
-//        // Trả về DTO cho client
-//        return new AuthResponse(newAccessToken, refreshToken, "Cấp access token mới thành công");
-//    }
 
     public Map<String, Object> refresh(String refreshToken, HttpServletResponse response) {
         String username = jwtService.extractUsername(refreshToken);
@@ -133,7 +111,8 @@ public class AuthService {
             throw new RuntimeException("Refresh token hết hạn hoặc không hợp lệ");
         }
 
-        User user = userRepository.findByUserNameOrEmail(username, username)
+        User user = userRepository.findByUserName(username)
+                .or(() -> userRepository.findByEmail(username))
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         Map<String, Object> claims = new HashMap<>();
@@ -173,30 +152,34 @@ public class AuthService {
     }
 
 
+    @Transactional
     public Map<String, Object> register(RegisterRequest request) {
-        if (userRepository.findByUserNameOrEmail(request.getUserName(), request.getEmail()).isPresent()) {
-            throw new RuntimeException("Username hoặc email đã tồn tại");
-        }
+        if (userRepository.findByUserName(request.getUserName()).isPresent())
+            throw new RuntimeException("Tên đăng nhập đã tồn tại");
+        if (userRepository.findByEmail(request.getEmail()).isPresent())
+            throw new RuntimeException("Email đã được sử dụng");
 
         User user = new User();
         user.setUserName(request.getUserName());
         user.setFullName(request.getFullName());
         user.setEmail(request.getEmail());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
+        user.setCreatedAt(LocalDateTime.now());
+        user.setVerified(false);
 
         Role userRole = roleRepository.findByRoleName("USER");
-
-        user.setRoleId(userRole.getRoleId()); // Sử dụng ID từ role tìm được
-
-
+        user.setRoleId(userRole.getRoleId());
         userRepository.save(user);
 
-        return Map.of("message", "Đăng ký thành công");
-    }
+        // ✅ gọi service gửi mail xác thực
+        emailVerificationService.createVerification(user);
 
+        return Map.of("message", "Đăng ký thành công! Vui lòng kiểm tra email để xác thực tài khoản.");
+    }
 
     public UserTokenInfo getCurrentUserInfo(HttpServletRequest request) {
         try {
+            // 🧩 1. Trích xuất toàn bộ claims từ JWT
             Claims claims = jwtService.extractAllClaimsFromRequest(request);
             Long userId = null;
             Long roleId = null;
@@ -209,20 +192,27 @@ public class AuthService {
             if (roleIdObj != null)
                 roleId = Long.parseLong(roleIdObj.toString());
 
-            // fallback nếu token thiếu thông tin
-            if (userId == null) {
+            // 🧩 2. Fallback nếu token không chứa userId / roleId
+            if (userId == null || roleId == null) {
                 String username = claims.getSubject();
-                var user = userRepository.findByUserNameOrEmail(username, username)
+
+                // 🔒 an toàn hơn — tách 2 query riêng
+                var user = userRepository.findByUserName(username)
+                        .or(() -> userRepository.findByEmail(username))
                         .orElseThrow(() -> new RuntimeException("User not found"));
+
                 userId = user.getUserId();
                 roleId = user.getRoleId();
             }
 
+            // 🧩 3. Trả ra DTO chứa thông tin user từ token
             return new UserTokenInfo(userId, roleId);
+
         } catch (Exception e) {
             throw new RuntimeException("❌ Failed to extract user info: " + e.getMessage());
         }
     }
+
 
 
 

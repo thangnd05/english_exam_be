@@ -19,6 +19,7 @@ import jakarta.transaction.Transactional;
 import lombok.AllArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
@@ -205,15 +206,18 @@ public class TestService {
     @Transactional
     public TestResponse getTestFullById(Long testId, HttpServletRequest httpRequest) {
 
+        // === 0️⃣ Xác định người dùng hiện tại từ token ===
+        // Nếu không có userId → token hết hạn hoặc không hợp lệ
         Long currentUserId = authUtils.getUserId(httpRequest);
         if (currentUserId == null) {
             throw new RuntimeException("Không xác định được người dùng. Token không hợp lệ hoặc đã hết hạn.");
         }
 
+        // === 1️⃣ Lấy thông tin bài test theo ID ===
         Test test = testRepository.findById(testId)
                 .orElseThrow(() -> new RuntimeException("Test not found"));
 
-        // 🟢 Nếu user có bài đang làm mà đã hết giờ -> tự động chuyển sang COMPLETED
+        // === 2️⃣ Kiểm tra nếu user có bài đang làm dở → auto submit nếu đã hết giờ ===
         UserTest latest = userTestRepository.findTopByUserIdAndTestIdOrderByStartedAtDesc(currentUserId, testId)
                 .orElse(null);
 
@@ -221,19 +225,19 @@ public class TestService {
             LocalDateTime now = LocalDateTime.now();
             LocalDateTime endTime = latest.getStartedAt().plusMinutes(test.getDurationMinutes());
 
+            // Nếu bài thi có thời gian đóng cửa (availableTo) sớm hơn thời gian hết bài → cắt về thời điểm đó
             if (test.getAvailableTo() != null && test.getAvailableTo().isBefore(endTime)) {
                 endTime = test.getAvailableTo();
             }
 
-            // 🕒 Nếu hết giờ thì tự động nộp bài
+            // Nếu hiện tại >= thời điểm kết thúc → tự động nộp bài
             if (now.isAfter(endTime) || now.isEqual(endTime)) {
                 System.out.println("⏰ Auto-submitting UserTest ID = " + latest.getUserTestId());
                 try {
-                    // 🟢 Gọi service chấm bài và cập nhật điểm
                     userTestService.submitTest(latest.getUserTestId());
                 } catch (Exception e) {
                     System.err.println("⚠️ Auto-submit failed for UserTest " + latest.getUserTestId() + ": " + e.getMessage());
-                    // Nếu lỗi thì vẫn đóng bài, tránh kẹt trạng thái
+                    // Nếu auto-submit lỗi → đánh dấu hoàn thành thủ công
                     latest.setStatus(UserTest.Status.COMPLETED);
                     latest.setFinishedAt(endTime);
                     userTestRepository.save(latest);
@@ -241,51 +245,79 @@ public class TestService {
             }
         }
 
-        // === 1. Tính lại số lượt ===
+        // === 3️⃣ Tính số lượt làm còn lại cho người dùng hiện tại ===
         TestStatus currentStatus = test.calculateStatus();
+
+        // Đếm số lần người dùng đã hoàn thành bài thi này
         int attemptsUsed = userTestRepository.countByUserIdAndTestIdAndStatus(
-                currentUserId,
-                testId,
-                UserTest.Status.COMPLETED
+                currentUserId, testId, UserTest.Status.COMPLETED
         );
 
         Integer maxAttempts = test.getMaxAttempts();
         Integer remaining = (maxAttempts != null)
                 ? Math.max(0, maxAttempts - attemptsUsed)
-                : null;
+                : null; // null nghĩa là không giới hạn lượt làm
 
-        // === 2. Lấy batch data ===
-        List<TestPart> testParts = testPartRepository.findByTestId(test.getTestId());
-        if (testParts.isEmpty()) {
-            return new TestResponse(
-                    test.getTestId(), test.getTitle(), test.getDescription(),
-                    test.getExamTypeId(), test.getCreatedBy(), test.getCreatedAt(),
-                    test.getBannerUrl(), test.getDurationMinutes(), test.getAvailableFrom(),
-                    test.getAvailableTo(), currentStatus.name(), maxAttempts,
-                    attemptsUsed, remaining, Collections.emptyList()
-            );
+        // === 🔒 Nếu người dùng đã hết lượt thi, trả về response đặc biệt (không ném lỗi nữa) ===
+        if (maxAttempts != null && remaining <= 0) {
+            TestResponse blocked = new TestResponse(test);
+            blocked.setCanDoTest(false);  // 🚫 Không được làm bài nữa
+            blocked.setAttemptsUsed(attemptsUsed);
+            blocked.setRemainingAttempts(remaining);
+            blocked.setStatus("FORBIDDEN"); // hiển thị rõ ràng trạng thái bị chặn
+            return blocked;
         }
 
-        List<Long> testPartIds = testParts.stream()
-                .map(TestPart::getTestPartId)
-                .toList();
+        // === 4️⃣ Lấy danh sách các phần thi (parts) của bài test ===
+        List<TestPart> testParts = testPartRepository.findByTestId(test.getTestId());
+        if (testParts.isEmpty()) {
+            // Nếu test không có part → trả về rỗng (tránh lỗi null)
+            TestResponse res = new TestResponse();
+            res.setTestId(test.getTestId());
+            res.setTitle(test.getTitle());
+            res.setDescription(test.getDescription());
+            res.setExamTypeId(test.getExamTypeId());
+            res.setCreatedBy(test.getCreatedBy());
+            res.setCreatedAt(test.getCreatedAt());
+            res.setBannerUrl(test.getBannerUrl());
+            res.setDurationMinutes(test.getDurationMinutes());
+            res.setAvailableFrom(test.getAvailableFrom());
+            res.setAvailableTo(test.getAvailableTo());
+            res.setStatus(currentStatus.name());
+            res.setMaxAttempts(maxAttempts);
+            res.setAttemptsUsed(attemptsUsed);
+            res.setRemainingAttempts(remaining);
+            res.setParts(Collections.emptyList());
+            res.setCanDoTest(true); // ✅ Vẫn cho phép làm bài
+            return res;
+        }
 
+        // === 5️⃣ Chuẩn bị dữ liệu câu hỏi & passage ===
+        List<Long> testPartIds = testParts.stream().map(TestPart::getTestPartId).toList();
+
+        // Lấy toàn bộ câu hỏi của các part
         List<TestQuestion> allTestQuestions = testQuestionRepository.findByTestPartIdIn(testPartIds);
-        Map<Long, List<TestQuestion>> questionsByPartId = allTestQuestions.stream()
-                .collect(Collectors.groupingBy(TestQuestion::getTestPartId));
 
+        // Gom câu hỏi theo testPartId
+        Map<Long, List<TestQuestion>> questionsByPartId =
+                allTestQuestions.stream().collect(Collectors.groupingBy(TestQuestion::getTestPartId));
+
+        // Lấy danh sách questionId thực tế
         List<Long> allQuestionIds = allTestQuestions.stream()
                 .map(TestQuestion::getQuestionId)
                 .distinct()
                 .toList();
 
+        // Load chi tiết Question trong bảng question
         List<Question> questionList = allQuestionIds.isEmpty()
                 ? Collections.emptyList()
                 : questionRepository.findAllById(allQuestionIds);
 
+        // Map questionId → Question
         Map<Long, Question> questionMap = questionList.stream()
                 .collect(Collectors.toMap(Question::getQuestionId, q -> q));
 
+        // Lấy toàn bộ passage liên quan (đoạn đọc / nghe)
         Set<Long> allPassageIds = questionMap.values().stream()
                 .map(Question::getPassageId)
                 .filter(Objects::nonNull)
@@ -298,13 +330,43 @@ public class TestService {
         Map<Long, Passage> passageMap = passageList.stream()
                 .collect(Collectors.toMap(Passage::getPassageId, p -> p));
 
+        // Lấy danh sách đáp án cho nhiều câu hỏi cùng lúc
         Map<Long, List<AnswerResponse>> answersByQuestionId =
                 answerService.getAnswersForMultipleQuestions(allQuestionIds);
 
+        // === 6️⃣ Xử lý từng phần thi (Part) ===
         List<TestPartResponse> partResponses = testParts.stream().map(tp -> {
-            List<TestQuestion> tqList = questionsByPartId.getOrDefault(tp.getTestPartId(), Collections.emptyList());
 
-            PassageResponse passageResponse = tqList.stream()
+            // 🟢 Lấy tất cả câu hỏi thuộc part này
+            List<TestQuestion> tqList = new ArrayList<>(
+                    questionsByPartId.getOrDefault(tp.getTestPartId(), Collections.emptyList())
+            );
+
+            // 🧩 Gom nhóm theo passage: cùng passageId thì cùng nhóm
+            // Nếu câu hỏi không có passage → nhóm vào -1 (câu lẻ)
+            Map<Long, List<TestQuestion>> groupedByPassage = tqList.stream()
+                    .collect(Collectors.groupingBy(tq -> {
+                        Question q = questionMap.get(tq.getQuestionId());
+                        return (q != null && q.getPassageId() != null) ? q.getPassageId() : -1L;
+                    }));
+
+            // Danh sách nhóm (mỗi nhóm là 1 passage hoặc 1 câu lẻ)
+            List<List<TestQuestion>> questionGroups = new ArrayList<>(groupedByPassage.values());
+
+            // 🌀 Random thứ tự passage
+            Collections.shuffle(questionGroups);
+            // 🔀 Random thứ tự câu hỏi trong từng passage
+            for (List<TestQuestion> group : questionGroups) {
+                Collections.shuffle(group);
+            }
+
+            // ✅ Gộp lại danh sách câu hỏi sau khi random
+            List<TestQuestion> randomizedTqList = questionGroups.stream()
+                    .flatMap(List::stream)
+                    .toList();
+
+            // === 7️⃣ Tạo PassageResponse (nếu có passage thật) ===
+            PassageResponse passageResponse = randomizedTqList.stream()
                     .map(tq -> questionMap.get(tq.getQuestionId()))
                     .filter(q -> q != null && q.getPassageId() != null)
                     .findFirst()
@@ -315,7 +377,8 @@ public class TestService {
                     ))
                     .orElse(null);
 
-            List<QuestionResponse> questionResponses = tqList.stream()
+            // === 8️⃣ Chuyển đổi danh sách câu hỏi + đáp án sang DTO QuestionResponse ===
+            List<QuestionResponse> questionResponses = randomizedTqList.stream()
                     .map(tq -> {
                         Question q = questionMap.get(tq.getQuestionId());
                         if (q == null) return null;
@@ -331,23 +394,24 @@ public class TestService {
                     .filter(Objects::nonNull)
                     .toList();
 
+            // === 9️⃣ Tạo DTO cho từng phần thi ===
             return new TestPartResponse(
                     tp.getTestPartId(), tp.getExamPartId(), tp.getNumQuestions(),
                     passageResponse, questionResponses
             );
         }).toList();
 
-        // === 4. Trả kết quả ===
+        // === 🔟 Trả về TestResponse hoàn chỉnh cho FE ===
         return new TestResponse(
                 test.getTestId(), test.getTitle(), test.getDescription(), test.getExamTypeId(),
                 test.getCreatedBy(), test.getCreatedAt(), test.getBannerUrl(), test.getDurationMinutes(),
                 test.getAvailableFrom(), test.getAvailableTo(), currentStatus.name(),
-                maxAttempts, attemptsUsed, remaining, partResponses
+                maxAttempts, attemptsUsed, remaining,
+                true, // ✅ canDoTest = true (người dùng còn quyền làm bài)
+                partResponses
         );
     }
 
-
-// Giả sử phương thức này nằm trong TestService.java
 
     public TestAdminResponse getTestFullByIdAdmin(Long testId) {
         // === LẤY DỮ LIỆU CƠ BẢN ===
@@ -487,6 +551,8 @@ public class TestService {
         );
     }
 
+
+
     public Map<String, Object> canStartTest(Long userId, Test test) {
         LocalDateTime now = LocalDateTime.now();
         Map<String, Object> result = new HashMap<>();
@@ -537,6 +603,18 @@ public class TestService {
 
         // ✅ Nếu hợp lệ, trả danh sách bài kiểm tra
         return testRepository.findByClassId(classId);
+    }
+
+
+    public List<Test> getTestByCreateBy(HttpServletRequest request) {
+        // 🧩 Lấy user hiện tại từ token
+        Long currentUserId = authUtils.getUserId(request);
+        if (currentUserId == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "🔒 Bạn cần đăng nhập để xem bài kiểm tra.");
+        }
+
+        // ✅ Nếu hợp lệ, trả danh sách bài kiểm tra
+        return testRepository.findByCreatedBy(currentUserId);
     }
 
     @Transactional
@@ -698,6 +776,7 @@ public class TestService {
                 test.getMaxAttempts(),
                 0,
                 test.getMaxAttempts(),
+                true,
                 partResponses
         );
     }

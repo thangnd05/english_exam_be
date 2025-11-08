@@ -4,22 +4,22 @@ import com.example.english_exam.models.Role;
 import com.example.english_exam.models.User;
 import com.example.english_exam.repositories.RoleRepository;
 import com.example.english_exam.repositories.UserRepository;
+import lombok.AllArgsConstructor;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
 
 @Component
+@AllArgsConstructor
 public class DataLoader implements CommandLineRunner {
 
     private final RoleRepository roleRepository;
     private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
 
-    public DataLoader(RoleRepository roleRepository, UserRepository userRepository) {
-        this.roleRepository = roleRepository;
-        this.userRepository = userRepository;
-    }
 
     @Override
     public void run(String... args) throws Exception {
@@ -39,9 +39,10 @@ public class DataLoader implements CommandLineRunner {
             user.setUserName("WinDe");
             user.setFullName("WinDe");
             user.setEmail("winde");
-            user.setPassword("123456");
+            user.setPassword(passwordEncoder.encode("123456"));
             user.setRoleId(adminRole.getRoleId());
             user.setCreatedAt(LocalDateTime.now());
+            user.setVerified(true);
             userRepository.save(user);
 
         }

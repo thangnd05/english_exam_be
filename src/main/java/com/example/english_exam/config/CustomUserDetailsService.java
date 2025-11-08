@@ -1,4 +1,3 @@
-// src/main/java/com/example/english_exam/config/CustomUserDetailsService.java
 package com.example.english_exam.config;
 
 import com.example.english_exam.models.Role;
@@ -18,7 +17,7 @@ import java.util.Collections;
 public class CustomUserDetailsService implements UserDetailsService {
 
     private final UserRepository userRepository;
-    private final RoleRepository roleRepository; // Phải inject thêm RoleRepository
+    private final RoleRepository roleRepository;
 
     @Autowired
     public CustomUserDetailsService(UserRepository userRepository, RoleRepository roleRepository) {
@@ -28,21 +27,26 @@ public class CustomUserDetailsService implements UserDetailsService {
 
     @Override
     public UserDetails loadUserByUsername(String input) throws UsernameNotFoundException {
-        // Query 1: Tìm User
-        User user = userRepository.findByUserNameOrEmail(input, input)
-                .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy người dùng với: " + input));
+        // 🔍 Tìm user theo username hoặc email
+        User user = userRepository.findByUserName(input)
+                .or(() -> userRepository.findByEmail(input))
+                .orElseThrow(() ->
+                        new UsernameNotFoundException("Không tìm thấy người dùng với: " + input));
 
-        // Lấy roleId từ user
-        Long roleId = user.getRoleId();
+        // 🚫 Nếu user chưa xác thực email → không cho login
+        if (!user.getVerified()) {
+            throw new UsernameNotFoundException("Tài khoản chưa được xác thực qua email.");
+        }
 
-        // Query 2: Dùng roleId để tìm Role. Thêm 1 lần truy vấn database!
-        Role role = roleRepository.findById(roleId)
-                .orElseThrow(() -> new RuntimeException("Lỗi: Không tìm thấy Role với ID: " + roleId));
+        // 🔑 Lấy role name
+        Role role = roleRepository.findById(user.getRoleId())
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy Role ID: " + user.getRoleId()));
 
         String roleName = "ROLE_" + role.getRoleName().toUpperCase();
 
+        // ✅ Trả về đối tượng UserDetails cho Spring Security
         return new org.springframework.security.core.userdetails.User(
-                user.getEmail(),
+                user.getEmail(),          // dùng email để login
                 user.getPassword(),
                 Collections.singletonList(new SimpleGrantedAuthority(roleName))
         );

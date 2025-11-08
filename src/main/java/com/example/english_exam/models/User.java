@@ -32,4 +32,8 @@ public class User {
 
     @Column(nullable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
+
+    private Boolean verified = false;
+    private String verificationToken;
+
 }

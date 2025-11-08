@@ -199,8 +199,6 @@ Bước 4: .toList() - Chuyển stream kết quả thành List
 
 
 
-
-
     @GetMapping("/{testId}/can-start")
     public ResponseEntity<Map<String, Object>> canStartTest(
             @PathVariable Long testId,
@@ -208,7 +206,6 @@ Bước 4: .toList() - Chuyển stream kết quả thành List
     ) {
         Test test = testService.getTestById(testId)
                 .orElseThrow(() -> new RuntimeException("Test not found"));
-
         Map<String, Object> result = testService.canStartTest(userId, test);
 
         if (!(Boolean) result.get("canStart")) {
@@ -258,6 +255,17 @@ Bước 4: .toList() - Chuyển stream kết quả thành List
     @GetMapping("/by-class/{classId}")
     public ResponseEntity<?> getTestsByClass(@PathVariable Long classId, HttpServletRequest request) {
         List<Test> tests = testService.getTestByClassId(classId, request);
+
+        if (tests.isEmpty()) {
+            return ResponseEntity.ok(Map.of("message", "Không có bài test nào trong lớp này"));
+        }
+
+        return ResponseEntity.ok(tests.stream().map(TestResponse::new).toList());
+    }
+
+    @GetMapping("/my-test")
+    public ResponseEntity<?> getTestsCreateBy(HttpServletRequest request) {
+        List<Test> tests = testService.getTestByCreateBy(request);
 
         if (tests.isEmpty()) {
             return ResponseEntity.ok(Map.of("message", "Không có bài test nào trong lớp này"));

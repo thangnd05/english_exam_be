@@ -9,6 +9,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -40,19 +41,40 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
 
-        String path = request.getServletPath();
-
         String token = resolveTokenFromCookie(request);
 
         if (StringUtils.hasText(token)) {
             String username = jwtService.extractUsername(token);
+
             if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-                UserDetails userDetails = userDetailsService.loadUserByUsername(username);
-                if (jwtService.isTokenValid(token, userDetails)) {
-                    UsernamePasswordAuthenticationToken authToken =
-                            new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
-                    authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                    SecurityContextHolder.getContext().setAuthentication(authToken);
+                try {
+                    // ⚠️ Bọc try-catch để tránh crash khi user bị xóa
+                    UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+
+                    if (jwtService.isTokenValid(token, userDetails)) {
+                        UsernamePasswordAuthenticationToken authToken =
+                                new UsernamePasswordAuthenticationToken(
+                                        userDetails, null, userDetails.getAuthorities());
+                        authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                        SecurityContextHolder.getContext().setAuthentication(authToken);
+                    }
+
+                } catch (UsernameNotFoundException e) {
+                    System.out.println("⚠️ Token không hợp lệ: user đã bị xóa khỏi hệ thống.");
+
+                    // 🧹 Xóa cookie accessToken để FE tự logout
+                    Cookie expiredCookie = new Cookie("accessToken", null);
+                    expiredCookie.setMaxAge(0);
+                    expiredCookie.setPath("/");
+                    expiredCookie.setHttpOnly(true);
+                    expiredCookie.setSecure(true);
+                    expiredCookie.setAttribute("SameSite", "Lax");
+                    response.addCookie(expiredCookie);
+
+                    // 🚫 Trả mã lỗi 401 cho FE
+                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                    response.getWriter().write("Token không hợp lệ hoặc người dùng đã bị xóa.");
+                    return;
                 }
             }
         }
