@@ -60,24 +60,29 @@ public class AuthController {
                     .body(Map.of("message", "Chưa đăng nhập"));
         }
 
-        String username = authentication.getName();
-        User user = userRepository.findByUserName(username)
-                .or(() -> userRepository.findByEmail(username))
-                .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy user"));
+        // 1. Log để kiểm tra (Xem trong console của IntelliJ/Eclipse)
+        String identifier = authentication.getName();
+        System.out.println("DEBUG: Identifier từ Token là: " + identifier);
 
+        // 2. Tìm kiếm: Ưu tiên tìm theo Email trước (vì OAuth2 trả về email)
+        // Sau đó mới tìm theo Username (cho login thường)
+        User user = userRepository.findByEmail(identifier)
+                .or(() -> userRepository.findByUserName(identifier))
+                .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy user với định danh: " + identifier));
 
         Role role = roleRepository.findById(user.getRoleId())
                 .orElseThrow(() -> new RuntimeException("Role không tồn tại"));
 
-        Map<String, Object> userInfo = Map.of(
+        // 3. Quan trọng: Đảm bảo các key này khớp với những gì React đang chờ (fullName, username...)
+        return ResponseEntity.ok(Map.of(
                 "id", user.getUserId(),
-                "username", user.getUserName(),
+                "username", user.getUserName() != null ? user.getUserName() : "",
+                "fullName", user.getFullName() != null ? user.getFullName() : "", // Thêm fullName
                 "email", user.getEmail(),
                 "role", role.getRoleName()
-        );
-
-        return ResponseEntity.ok(userInfo);
+        ));
     }
+
 
 
 
