@@ -9,7 +9,10 @@ import com.example.english_exam.repositories.EmailVerificationRepository;
 import com.example.english_exam.repositories.RoleRepository;
 import com.example.english_exam.repositories.UserRepository;
 import com.example.english_exam.security.AuthService;
+import com.example.english_exam.security.JwtService;
 import com.example.english_exam.services.EmailVerificationService;
+import io.jsonwebtoken.Claims;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
@@ -31,6 +34,7 @@ public class AuthController {
     private final UserRepository  userRepository;
     private final RoleRepository roleRepository;
     private final EmailVerificationService emailVerificationService;
+    private final JwtService jwtService;
 
 
 
@@ -54,34 +58,31 @@ public class AuthController {
 
 
     @GetMapping("/me")
-    public ResponseEntity<?> getCurrentUser(Authentication authentication) {
-        if (authentication == null || !authentication.isAuthenticated()) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(Map.of("message", "Chưa đăng nhập"));
+    public ResponseEntity<?> getCurrentUser(HttpServletRequest request) {
+        try {
+            Claims claims = jwtService.extractAllClaimsFromRequest(request);
+            if (claims == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+            }
+
+            Long userId = Long.parseLong(claims.get("userId").toString());
+
+            User user = userRepository.findById(userId)
+                    .orElseThrow();
+
+            Role role = roleRepository.findById(user.getRoleId()).orElseThrow();
+
+            return ResponseEntity.ok(Map.of(
+                    "id", user.getUserId(),
+                    "username", user.getUserName(),
+                    "email", user.getEmail(),
+                    "role", role.getRoleName()
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
-
-        // 1. Log để kiểm tra (Xem trong console của IntelliJ/Eclipse)
-        String identifier = authentication.getName();
-        System.out.println("DEBUG: Identifier từ Token là: " + identifier);
-
-        // 2. Tìm kiếm: Ưu tiên tìm theo Email trước (vì OAuth2 trả về email)
-        // Sau đó mới tìm theo Username (cho login thường)
-        User user = userRepository.findByEmail(identifier)
-                .or(() -> userRepository.findByUserName(identifier))
-                .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy user với định danh: " + identifier));
-
-        Role role = roleRepository.findById(user.getRoleId())
-                .orElseThrow(() -> new RuntimeException("Role không tồn tại"));
-
-        // 3. Quan trọng: Đảm bảo các key này khớp với những gì React đang chờ (fullName, username...)
-        return ResponseEntity.ok(Map.of(
-                "id", user.getUserId(),
-                "username", user.getUserName() != null ? user.getUserName() : "",
-                "fullName", user.getFullName() != null ? user.getFullName() : "", // Thêm fullName
-                "email", user.getEmail(),
-                "role", role.getRoleName()
-        ));
     }
+
 
 
 

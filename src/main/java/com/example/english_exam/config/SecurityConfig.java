@@ -75,7 +75,10 @@ public class SecurityConfig {
                                 "/api/auth/register",
                                 "/api/auth/refresh",
                                 "/api/auth/verify",
+                                "/api/auth/logout",
                                 "/oauth2/**",
+                                "/api/exam-types/**",
+                                "/api/tests/**",
                                 "/login/oauth2/**"
                         ).permitAll()
                         .anyRequest().authenticated()
@@ -124,6 +127,7 @@ public class SecurityConfig {
                                     frontendOrigin + "/oauth2/redirect"
                             );
                         })
+
                 );
 
         // 🔥 JWT FILTER LUÔN CHẠY TRƯỚC
@@ -134,6 +138,8 @@ public class SecurityConfig {
 
         return http.build();
     }
+
+
 
     @Bean
     public AuthenticationProvider authenticationProvider(

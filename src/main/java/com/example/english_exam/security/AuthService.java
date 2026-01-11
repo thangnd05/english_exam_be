@@ -137,8 +137,14 @@ public class AuthService {
     }
 
     public void logout(HttpServletResponse response) {
-        String delCookie = "accessToken=; HttpOnly; Path=/; Max-Age=0; SameSite=Strict; Secure";
-        response.addHeader("Set-Cookie", delCookie);
+        // 1. Xóa accessToken của bạn
+        String delAccessToken = "accessToken=; HttpOnly; Path=/; Max-Age=0; SameSite=Secure";
+
+        // 2. Xóa JSESSIONID của Spring Security
+        String delJSession = "JSESSIONID=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax";
+
+        response.addHeader("Set-Cookie", delAccessToken);
+        response.addHeader("Set-Cookie", delJSession);
     }
 
     private void setAccessTokenCookie(String accessToken, HttpServletResponse response) {
