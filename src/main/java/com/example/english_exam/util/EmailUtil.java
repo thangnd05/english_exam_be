@@ -22,23 +22,23 @@ public class EmailUtil {
 
         // 🟢 Thêm người gửi (rất quan trọng để Gmail không đánh dấu spam)
         try {
-            helper.setFrom("Thang10072005@gmail.com", "English Exam");
+            helper.setFrom("Thang10072005@gmail.com", "WinDe Exam");
         } catch (UnsupportedEncodingException e) {
             helper.setFrom("Thang10072005@gmail.com");
         }        helper.setTo(email);
-        helper.setSubject("🔐 Xác thực tài khoản English Exam");
+        helper.setSubject("🔐 Xác thực tài khoản WinDe Exam");
 
         // 🧩 HTML nội dung email (nút đẹp, giao diện gọn)
         String content = """
             <div style="font-family:Arial, sans-serif; background:#f9f9f9; padding:20px; border-radius:10px;">
                 <h2 style="color:#2c3e50;">Xin chào!</h2>
                 <p style="font-size:16px; color:#333;">
-                    Cảm ơn bạn đã đăng ký tài khoản tại <b>English Exam</b>.<br>
+                    Cảm ơn bạn đã đăng ký tài khoản tại <b>WinDe Exam</b>.<br>
                     Vui lòng ấn vào nút bên dưới để xác thực tài khoản của bạn:
                 </p>
                 <div style="margin:25px 0;">
-                    <a href="http://localhost:3000/verify?token=%s" 
-                       style="background-color:#1abc9c; color:white; text-decoration:none; 
+                    <a href="http://localhost:3000/verify?token=%s"
+                       style="background-color:#00c6ff; color:white; text-decoration:none;
                               padding:12px 20px; border-radius:8px; font-weight:bold;">
                         Xác thực ngay
                     </a>
@@ -46,7 +46,7 @@ public class EmailUtil {
                 <p style="color:#666; font-size:13px;">
                     Nếu bạn không tạo tài khoản này, vui lòng bỏ qua email này.<br><br>
                     Trân trọng,<br>
-                    <b>Đội ngũ English Exam</b>
+                    <b>Đội ngũ WinDe Exam</b>
                 </p>
             </div>
         """.formatted(token);

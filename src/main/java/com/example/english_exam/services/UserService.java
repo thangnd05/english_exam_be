@@ -1,20 +1,23 @@
 package com.example.english_exam.services;
 
+import com.example.english_exam.cloudinary.CloudinaryService;
 import com.example.english_exam.models.User;
 import com.example.english_exam.repositories.UserRepository;
+import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
 
 
 @Service
+@AllArgsConstructor
 public class UserService {
     private UserRepository userRepository;
+    private CloudinaryService cloudinaryService;
 
-    public UserService(UserRepository userRepository) {
-        this.userRepository = userRepository;
-    }
 
     public List<User> findAll() {
         return userRepository.findAll();
@@ -26,6 +29,41 @@ public class UserService {
 
     public User save(User user) {
         return userRepository.save(user);
+    }
+
+    public User createUser(User user) {
+
+        // ✅ Auto avatar mặc định theo username (giống Google)
+        String defaultAvatar =
+                "https://ui-avatars.com/api/?name="
+                        + user.getUserName()
+                        + "&background=random&color=fff";
+
+        user.setAvatarUrl(defaultAvatar);
+
+        return userRepository.save(user);
+    }
+
+
+    // ==================================================
+    // ✅ UPDATE USER + UPDATE AVATAR
+    // ==================================================
+    public User updateUser(Long id, User updatedUser, MultipartFile avatar) throws IOException {
+
+        User existingUser = userRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        // Update info
+        existingUser.setFullName(updatedUser.getFullName());
+        existingUser.setPassword(updatedUser.getPassword());
+
+        // Upload avatar mới nếu có
+        if (avatar != null && !avatar.isEmpty()) {
+            String avatarUrl = cloudinaryService.uploadImage(avatar);
+            existingUser.setAvatarUrl(avatarUrl);
+        }
+
+        return userRepository.save(existingUser);
     }
 
 

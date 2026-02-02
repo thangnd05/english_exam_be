@@ -26,6 +26,7 @@ public class EmailVerificationService {
     private UserRepository userRepository;
 
     @Autowired
+//    private EmailUtil emailUtil;
     private EmailUtil emailUtil;
 
     /**

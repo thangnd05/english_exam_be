@@ -4,6 +4,7 @@ package com.example.english_exam.security;
 import com.example.english_exam.dto.auth.UserTokenInfo;
 import com.example.english_exam.dto.request.RegisterRequest;
 import com.example.english_exam.dto.response.AuthResponse;
+import com.example.english_exam.dto.response.UserResponse;
 import com.example.english_exam.models.EmailVerification;
 import com.example.english_exam.models.Role;
 import com.example.english_exam.models.User;
@@ -49,57 +50,41 @@ public class AuthService {
 
     // src/main/java/com/example/english_exam/security/AuthService.java
 
-    public Map<String, Object> login(String identifier, String password, HttpServletResponse response) {
-        try {
-            // 🧩 Xác thực username/email + password
-            authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(identifier, password)
-            );
-        } catch (BadCredentialsException ex) {
-            throw new RuntimeException("Thông tin đăng nhập không đúng");
-        }
+    public UserResponse login(String identifier, String password, HttpServletResponse response) {
 
-        // 🔍 Tìm user theo username hoặc email
+        authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(identifier, password)
+        );
+
         User user = userRepository.findByUserName(identifier)
                 .or(() -> userRepository.findByEmail(identifier))
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng"));
 
-        // 🚫 Kiểm tra xác thực email
         if (!user.getVerified()) {
-            throw new RuntimeException("Tài khoản chưa được xác thực. Vui lòng kiểm tra email để kích hoạt tài khoản.");
+            throw new RuntimeException("Tài khoản chưa xác thực email");
         }
 
-        // 🧠 Lấy thông tin chi tiết user (phục vụ cho token)
         UserDetails userDetails = customUserDetailsService.loadUserByUsername(identifier);
 
-        // 🪙 Thêm thông tin bổ sung vào token
         Map<String, Object> claims = new HashMap<>();
         claims.put("userId", user.getUserId());
         claims.put("roleId", user.getRoleId());
 
-        // 🔐 Sinh access token & refresh token
         String accessToken = jwtService.generateToken(userDetails, claims);
-        String refreshToken = jwtService.generateRefreshToken(userDetails);
 
-        // 🍪 Lưu accessToken vào cookie (HttpOnly)
+        // ✅ set cookie
         setAccessTokenCookie(accessToken, response);
 
-        // 🧾 Chuẩn bị dữ liệu user trả về FE
-        Map<String, Object> userResponse = Map.of(
-                "id", user.getUserId(),
-                "username", user.getUserName(),
-                "email", user.getEmail(),
-                "roleId", user.getRoleId(),
-                "verified", user.getVerified()
-        );
-
-        // ✅ Trả về response cho FE
-        return Map.of(
-                "message", "Đăng nhập thành công",
-                "refreshToken", refreshToken,
-                "user", userResponse
+        // ✅ Trả DTO user phẳng
+        return new UserResponse(
+                user.getUserId(),
+                user.getUserName(),
+                user.getEmail(),
+                user.getRoleId(),
+                user.getAvatarUrl()
         );
     }
+
 
 
     public Map<String, Object> refresh(String refreshToken, HttpServletResponse response) {
@@ -162,6 +147,7 @@ public class AuthService {
 
     @Transactional
     public Map<String, Object> register(RegisterRequest request) {
+
         // 1️⃣ Kiểm tra username
         if (userRepository.findByUserName(request.getUserName()).isPresent())
             throw new RuntimeException("Tên đăng nhập đã tồn tại");
@@ -189,8 +175,18 @@ public class AuthService {
         user.setCreatedAt(LocalDateTime.now());
         user.setVerified(false);
 
+        // ✅ Avatar mặc định theo username (Google style)
+        String defaultAvatar =
+                "https://ui-avatars.com/api/?name="
+                        + request.getUserName()
+                        + "&background=random&color=fff";
+
+        user.setAvatarUrl(defaultAvatar);
+
+        // Role USER
         Role userRole = roleRepository.findByRoleName("USER");
         user.setRoleId(userRole.getRoleId());
+
         userRepository.save(user);
 
         // 4️⃣ Gửi mail xác thực
@@ -204,6 +200,24 @@ public class AuthService {
 
         return Map.of("message", "Đăng ký thành công! Vui lòng kiểm tra email để xác thực tài khoản.");
     }
+
+    public UserResponse me(HttpServletRequest request) {
+
+        Claims claims = jwtService.extractAllClaimsFromRequest(request);
+        Long userId = Long.parseLong(claims.get("userId").toString());
+
+        User user = userRepository.findById(userId)
+                .orElseThrow();
+
+        return new UserResponse(
+                user.getUserId(),
+                user.getUserName(),
+                user.getEmail(),
+                user.getRoleId(),
+                user.getAvatarUrl()
+        );
+    }
+
 
 
     public UserTokenInfo getCurrentUserInfo(HttpServletRequest request) {

@@ -36,4 +36,7 @@ public class User {
     private Boolean verified = false;
     private String verificationToken;
 
+    @Column(name = "avatar_url")
+    private String avatarUrl;
+
 }

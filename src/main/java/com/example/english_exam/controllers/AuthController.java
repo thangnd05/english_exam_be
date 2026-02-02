@@ -2,10 +2,9 @@ package com.example.english_exam.controllers;
 
 import com.example.english_exam.dto.request.LoginRequest;
 import com.example.english_exam.dto.request.RegisterRequest;
-import com.example.english_exam.models.EmailVerification;
+import com.example.english_exam.dto.response.UserResponse;
 import com.example.english_exam.models.Role;
 import com.example.english_exam.models.User;
-import com.example.english_exam.repositories.EmailVerificationRepository;
 import com.example.english_exam.repositories.RoleRepository;
 import com.example.english_exam.repositories.UserRepository;
 import com.example.english_exam.security.AuthService;
@@ -18,12 +17,9 @@ import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
-import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -39,7 +35,7 @@ public class AuthController {
 
 
     @PostMapping("/login")
-    public ResponseEntity<?> login(@Valid @RequestBody LoginRequest request,
+    public ResponseEntity<UserResponse> login(@Valid @RequestBody LoginRequest request,
                                    HttpServletResponse response) {
         return ResponseEntity.ok(authService.login(request.getIdentifier(), request.getPassword(), response));
     }
@@ -58,30 +54,11 @@ public class AuthController {
 
 
     @GetMapping("/me")
-    public ResponseEntity<?> getCurrentUser(HttpServletRequest request) {
-        try {
-            Claims claims = jwtService.extractAllClaimsFromRequest(request);
-            if (claims == null) {
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-            }
-
-            Long userId = Long.parseLong(claims.get("userId").toString());
-
-            User user = userRepository.findById(userId)
-                    .orElseThrow();
-
-            Role role = roleRepository.findById(user.getRoleId()).orElseThrow();
-
-            return ResponseEntity.ok(Map.of(
-                    "id", user.getUserId(),
-                    "username", user.getUserName(),
-                    "email", user.getEmail(),
-                    "role", role.getRoleName()
-            ));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
+    public ResponseEntity<UserResponse> me(HttpServletRequest request) {
+        return ResponseEntity.ok(authService.me(request));
     }
+
+
 
 
 
@@ -115,5 +92,6 @@ public class AuthController {
     public ResponseEntity<Map<String, Object>> verifyEmail(@RequestParam String token) {
         return emailVerificationService.verifyToken(token);
     }
+
 
 }

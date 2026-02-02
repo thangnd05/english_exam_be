@@ -4,7 +4,9 @@ import com.example.english_exam.models.User;
 import com.example.english_exam.services.UserService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.List;
 
 @RestController
@@ -33,15 +35,22 @@ public class UserController {
 
     // Tạo mới user
     @PostMapping
-    public ResponseEntity<User> createUser(@RequestBody User user) {
-        return ResponseEntity.ok(userService.save(user));
+    public ResponseEntity<User> createUser(
+            @RequestBody User user
+    ) {
+        return ResponseEntity.ok(userService.createUser(user));
     }
+
 
     // Cập nhật user
     @PutMapping("/{id}")
-    public ResponseEntity<User> updateUser(@PathVariable Long id, @RequestBody User updatedUser) {
-        updatedUser.setUserId(id);
-        return ResponseEntity.ok(userService.save(updatedUser));
+    public ResponseEntity<User> updateUser(
+            @PathVariable Long id,
+            @RequestPart("user") User updatedUser,
+            @RequestPart(value = "avatar", required = false) MultipartFile avatar
+    ) throws IOException {
+
+        return ResponseEntity.ok(userService.updateUser(id, updatedUser, avatar));
     }
 
     // Xóa user
