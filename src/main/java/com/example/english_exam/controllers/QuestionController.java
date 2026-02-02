@@ -1,9 +1,7 @@
 package com.example.english_exam.controllers;
 
 import com.example.english_exam.dto.request.CreateQuestionsWithPassageRequest;
-import com.example.english_exam.dto.request.NormalQuestionRequest;
 import com.example.english_exam.dto.request.QuestionRequest;
-import com.example.english_exam.dto.response.admin.NormalQuestionAdminResponse;
 import com.example.english_exam.dto.response.admin.QuestionAdminResponse;
 import com.example.english_exam.dto.response.user.QuestionResponse;
 import com.example.english_exam.models.Question;

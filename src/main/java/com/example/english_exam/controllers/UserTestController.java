@@ -2,7 +2,6 @@ package com.example.english_exam.controllers;
 
 import com.example.english_exam.dto.response.UserTestResponse;
 import com.example.english_exam.models.UserTest;
-import com.example.english_exam.security.AuthService;
 import com.example.english_exam.services.ExamAndTest.UserTestService;
 import com.example.english_exam.util.AuthUtils;
 import jakarta.servlet.http.HttpServletRequest;

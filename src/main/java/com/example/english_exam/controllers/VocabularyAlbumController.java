@@ -2,7 +2,6 @@ package com.example.english_exam.controllers;
 
 import com.example.english_exam.models.VocabularyAlbum;
 import com.example.english_exam.services.LearningVoca.VocabularyAlbumService;
-import com.example.english_exam.services.LearningVoca.VocabularyService;
 import com.example.english_exam.util.AuthUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.AllArgsConstructor;

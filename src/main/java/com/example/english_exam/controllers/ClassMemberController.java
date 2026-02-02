@@ -1,6 +1,5 @@
 package com.example.english_exam.controllers;
 
-import com.example.english_exam.dto.response.ClassStudentResponse;
 import com.example.english_exam.models.ClassMember;
 import com.example.english_exam.services.ClassMemberService;
 import jakarta.servlet.http.HttpServletRequest;

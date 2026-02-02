@@ -5,7 +5,6 @@ import com.example.english_exam.dto.request.TestRequest;
 import com.example.english_exam.dto.response.admin.TestAdminResponse;
 import com.example.english_exam.dto.response.user.TestResponse;
 import com.example.english_exam.models.Test;
-import com.example.english_exam.security.AuthService;
 import com.example.english_exam.services.ExamAndTest.TestService;
 import com.example.english_exam.util.AuthUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -20,8 +19,6 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
-
-@CrossOrigin(origins = "http://localhost:3000")
 
 @RestController
 @RequestMapping("/api/tests")

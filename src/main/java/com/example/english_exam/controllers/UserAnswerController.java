@@ -2,17 +2,13 @@ package com.example.english_exam.controllers;
 
 import com.example.english_exam.dto.request.UserAnswerRequest;
 import com.example.english_exam.dto.response.ResultSummaryDto;
-import com.example.english_exam.models.Answer;
 import com.example.english_exam.models.UserAnswer;
 import com.example.english_exam.services.ExamAndTest.AnswerService;
 import com.example.english_exam.services.ExamAndTest.UserAnswerService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/user-answers")
