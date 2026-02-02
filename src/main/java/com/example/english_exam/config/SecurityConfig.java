@@ -79,7 +79,8 @@ public class SecurityConfig {
                                 "/oauth2/**",
                                 "/api/exam-types/**",
                                 "/api/tests/**",
-                                "/login/oauth2/**"
+                                "/login/oauth2/**",
+                                "/api/evaluations"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )
