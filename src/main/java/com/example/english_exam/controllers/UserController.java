@@ -2,6 +2,8 @@ package com.example.english_exam.controllers;
 
 import com.example.english_exam.models.User;
 import com.example.english_exam.services.UserService;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -43,12 +45,15 @@ public class UserController {
 
 
     // Cập nhật user
-    @PutMapping("/{id}")
+    @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<User> updateUser(
             @PathVariable Long id,
-            @RequestPart("user") User updatedUser,
+            @RequestPart("user") String userJson,
             @RequestPart(value = "avatar", required = false) MultipartFile avatar
     ) throws IOException {
+
+        ObjectMapper mapper = new ObjectMapper();
+        User updatedUser = mapper.readValue(userJson, User.class);
 
         return ResponseEntity.ok(userService.updateUser(id, updatedUser, avatar));
     }

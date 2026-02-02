@@ -45,19 +45,17 @@ public class UserService {
     }
 
 
-    // ==================================================
-    // ✅ UPDATE USER + UPDATE AVATAR
-    // ==================================================
     public User updateUser(Long id, User updatedUser, MultipartFile avatar) throws IOException {
 
         User existingUser = userRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        // Update info
+        // ✅ Update thông tin profile
         existingUser.setFullName(updatedUser.getFullName());
-        existingUser.setPassword(updatedUser.getPassword());
+        existingUser.setUserName(updatedUser.getUserName());
+        existingUser.setEmail(updatedUser.getEmail());
 
-        // Upload avatar mới nếu có
+        // ✅ Upload avatar nếu có
         if (avatar != null && !avatar.isEmpty()) {
             String avatarUrl = cloudinaryService.uploadImage(avatar);
             existingUser.setAvatarUrl(avatarUrl);
@@ -65,6 +63,7 @@ public class UserService {
 
         return userRepository.save(existingUser);
     }
+
 
 
     public boolean deleteUser(Long id) {
