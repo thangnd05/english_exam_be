@@ -39,4 +39,7 @@ public class Question {
 
     @Column(name = "class_id")
     private Long classId;
+
+    @Column(name ="chapter_id")
+    private Long chapterId;
 }

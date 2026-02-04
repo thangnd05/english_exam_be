@@ -22,7 +22,7 @@ public class ClassService {
     private final AuthUtils authUtils;
 
     // 🟢 Tạo lớp học mới (sinh ID ngẫu nhiên & gán teacherId từ token)
-    @PreAuthorize("!hasRole('USER')")
+//    @PreAuthorize("!hasRole('USER')")
     @Transactional
     public ClassEntity createClass(ClassEntity classEntity, HttpServletRequest httpRequest) {
         // 🔹 Lấy userId hiện tại từ JWT
