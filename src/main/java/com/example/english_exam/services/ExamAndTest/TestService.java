@@ -1,10 +1,12 @@
 package com.example.english_exam.services.ExamAndTest;
 
 import com.example.english_exam.cloudinary.CloudinaryService;
+import com.example.english_exam.dto.request.AddQuestionsToTestRequest;
 import com.example.english_exam.dto.response.*;
 import com.example.english_exam.dto.response.admin.AnswerAdminResponse;
 import com.example.english_exam.dto.response.admin.QuestionAdminResponse;
 import com.example.english_exam.dto.response.admin.TestAdminResponse;
+import com.example.english_exam.dto.response.admin.TestPartAdminResponse;
 import com.example.english_exam.dto.response.user.AnswerResponse;
 import com.example.english_exam.dto.response.user.QuestionResponse;
 import com.example.english_exam.dto.response.user.TestPartResponse;
@@ -397,15 +399,16 @@ public class TestService {
 
                 return new QuestionAdminResponse(
                         q.getQuestionId(),
-                        examTypeId,                 // 🟢 thêm mới
+                        examTypeId,
                         q.getExamPartId(),
                         q.getQuestionText(),
                         q.getQuestionType(),
                         q.getExplanation(),
-                        passageDto,                 // 🟢 thêm mới
+                        passageDto,
                         tp.getTestPartId(),
                         answers,
-                        q.getClassId()
+                        q.getClassId(),
+                        q.getIsBank()
                 );
             }).filter(Objects::nonNull).toList();
 
@@ -504,91 +507,38 @@ public class TestService {
         return testRepository.findByCreatedBy(currentUserId);
     }
 
-
-
-    public TestAdminResponse getTestDetailForAdmin(Long testId) {
-        Test test = testRepository.findById(testId)
-                .orElseThrow(() -> new RuntimeException("Test not found"));
-
-        TestAdminResponse dto = new TestAdminResponse();
-        dto.setTestId(test.getTestId());
-        dto.setTitle(test.getTitle());
-        dto.setDescription(test.getDescription());
-        dto.setExamTypeId(test.getExamTypeId());
-        dto.setCreatedBy(test.getCreatedBy());
-        dto.setCreatedAt(test.getCreatedAt());
-        dto.setBannerUrl(test.getBannerUrl());
-        dto.setDurationMinutes(test.getDurationMinutes());
-        dto.setAvailableFrom(test.getAvailableFrom());
-        dto.setAvailableTo(test.getAvailableTo());
-        dto.setMaxAttempts(test.getMaxAttempts());
-        dto.setClassId(test.getClassId());
-
-        // 🔹 Load test parts
-        List<TestPart> parts = testPartRepository.findByTestId(testId);
-        List<TestPartAdminResponse> partResponses = new ArrayList<>();
-
-        for (TestPart part : parts) {
-            TestPartAdminResponse partDto = new TestPartAdminResponse();
-            partDto.setTestPartId(part.getTestPartId());
-            partDto.setExamPartId(part.getExamPartId());
-            partDto.setNumQuestions(part.getNumQuestions());
-
-            // 🔹 Load questions
-            List<TestQuestion> tqs = testQuestionRepository.findByTestPartId(part.getTestPartId());
-            List<QuestionAdminResponse> questionDtos = new ArrayList<>();
-
-            PassageResponse passageDto = null;
-
-            for (TestQuestion tq : tqs) {
-                Question q = questionRepository.findById(tq.getQuestionId()).orElse(null);
-                if (q == null) continue;
-
-                QuestionAdminResponse qDto = new QuestionAdminResponse();
-                qDto.setQuestionId(q.getQuestionId());
-                qDto.setExamPartId(q.getExamPartId());
-                qDto.setQuestionText(q.getQuestionText());
-                qDto.setQuestionType(q.getQuestionType());
-                qDto.setExplanation(q.getExplanation());
-                qDto.setClassId(q.getClassId());
-                qDto.setTestPartId(part.getTestPartId());
-
-                // ✅ Nếu có passage thì build PassageResponse đúng cấu trúc
-                if (q.getPassageId() != null && passageDto == null) {
-                    Passage passage = passageRepository.findById(q.getPassageId()).orElse(null);
-                    if (passage != null) {
-                        passageDto = new PassageResponse(
-                                passage.getPassageId(),
-                                passage.getContent(),
-                                passage.getMediaUrl(),
-                                passage.getPassageType()
-                        );
-                    }
-                }
-
-                // ✅ Gắn danh sách đáp án
-                List<Answer> answers = answerRepository.findByQuestionId(q.getQuestionId());
-                List<AnswerAdminResponse> answerDtos = answers.stream()
-                        .map(a -> new AnswerAdminResponse(
-                                a.getAnswerId(),
-                                a.getAnswerText(),
-                                a.getIsCorrect(),          // ✅ Gọi getter đúng cách
-                                a.getAnswerLabel()
-                        ))
-                        .toList();
-
-                qDto.setAnswers(answerDtos);
-                questionDtos.add(qDto);
-            }
-
-            partDto.setQuestions(questionDtos);
-            partDto.setPassage(passageDto);
-            partResponses.add(partDto);
+    /**
+     * Gắn câu hỏi từ kho vào part của đề (chỉ tạo bản ghi test_questions).
+     * Câu hỏi phải đã tồn tại trong kho; không tạo câu hỏi mới ở đây.
+     */
+    @Transactional
+    public void addQuestionsToTestPart(AddQuestionsToTestRequest request) {
+        if (request.getTestPartId() == null || request.getQuestionIds() == null || request.getQuestionIds().isEmpty()) {
+            throw new RuntimeException("testPartId và questionIds không được rỗng.");
         }
+        Long testPartId = request.getTestPartId();
+        TestPart testPart = testPartRepository.findById(testPartId)
+                .orElseThrow(() -> new RuntimeException("TestPart không tồn tại: " + testPartId));
 
-        dto.setParts(partResponses);
-        return dto;
+        for (Long questionId : request.getQuestionIds()) {
+            Question question = questionRepository.findById(questionId)
+                    .orElseThrow(() -> new RuntimeException("Câu hỏi không tồn tại trong kho: " + questionId));
+            if (!question.getExamPartId().equals(testPart.getExamPartId())) {
+                throw new RuntimeException("Câu hỏi " + questionId + " không thuộc examPart của part này.");
+            }
+            if (testQuestionRepository.existsByQuestionIdAndTestPartId(questionId, testPartId)) {
+                continue;
+            }
+            TestQuestion tq = new TestQuestion();
+            tq.setTestPartId(testPartId);
+            tq.setQuestionId(questionId);
+            testQuestionRepository.save(tq);
+        }
     }
+
+
+
+
 
 
 

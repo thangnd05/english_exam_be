@@ -1,5 +1,9 @@
 package com.example.english_exam.controllers;
 
+import com.example.english_exam.dto.request.BulkCreateQuestionsToBankRequest;
+import com.example.english_exam.dto.request.BulkQuestionWithPassageRequest;
+import com.example.english_exam.dto.request.CreateQuestionAndAttachRequest;
+import com.example.english_exam.dto.request.QuestionCreateRequest;
 import com.example.english_exam.dto.response.admin.QuestionAdminResponse;
 import com.example.english_exam.dto.response.user.QuestionResponse;
 import com.example.english_exam.models.Question;
@@ -13,6 +17,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.List;
 
 @RestController
@@ -61,10 +66,65 @@ public class QuestionController {
 
 
     // =================== CREATE ===================
+    // Tạo câu hỏi thông thường vào kho (không passage). Gắn đề qua API riêng.
 
+    @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<QuestionAdminResponse> createQuestionToBank(
+            @RequestBody QuestionCreateRequest request,
+            HttpServletRequest httpRequest
+    ) {
+        try {
+            QuestionAdminResponse response = questionService.createQuestionToBank(request, httpRequest);
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
 
+    /** Tạo nhiều câu hỏi thông thường vào kho (không passage). */
+    @PostMapping(value = "/bulk", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<List<QuestionAdminResponse>> createBulkQuestionsToBankNoPassage(
+            @RequestBody BulkCreateQuestionsToBankRequest request,
+            HttpServletRequest httpRequest
+    ) {
+        try {
+            List<QuestionAdminResponse> responses = questionService.createBulkQuestionsToBankNoPassage(request, httpRequest);
+            return ResponseEntity.status(HttpStatus.CREATED).body(responses);
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
 
+    @PostMapping(value = "/bulk-with-passage", consumes = MediaType.MULTIPART_FORM_DATA_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<List<QuestionAdminResponse>> createBulkQuestionsToBank(
+            @RequestParam("request") String requestJson,
+            @RequestParam(value = "audio", required = false) MultipartFile audioFile,
+            HttpServletRequest httpRequest
+    ) {
+        try {
+            BulkQuestionWithPassageRequest request = objectMapper.readValue(requestJson, BulkQuestionWithPassageRequest.class);
+            List<QuestionAdminResponse> responses = questionService.createBulkQuestionsToBank(request, httpRequest, audioFile);
+            return ResponseEntity.status(HttpStatus.CREATED).body(responses);
+        } catch (IOException e) {
+            return ResponseEntity.badRequest().build();
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
 
+    /** Tạo câu hỏi tức thì và gắn thẳng vào part của đề (isBank = false, không lưu kho). */
+    @PostMapping(value = "/create-and-attach", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<QuestionAdminResponse> createQuestionAndAttachToTest(
+            @RequestBody CreateQuestionAndAttachRequest request,
+            HttpServletRequest httpRequest
+    ) {
+        try {
+            QuestionAdminResponse response = questionService.createQuestionAndAttachToTest(request, httpRequest);
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
 
     // =================== DELETE ===================
 

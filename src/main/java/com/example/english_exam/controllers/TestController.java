@@ -1,5 +1,6 @@
 package com.example.english_exam.controllers;
 
+import com.example.english_exam.dto.request.AddQuestionsToTestRequest;
 import com.example.english_exam.dto.response.admin.TestAdminResponse;
 import com.example.english_exam.dto.response.user.TestResponse;
 import com.example.english_exam.models.Test;
@@ -35,15 +36,6 @@ public class TestController {
         return ResponseEntity.ok(testService.getAllTests()); // 200 OK
     }
 
-    // Lấy test theo id
-    @GetMapping("/{id}")
-    public ResponseEntity<TestAdminResponse> getTestById(@PathVariable Long id) {
-        TestAdminResponse response = testService.getTestDetailForAdmin(id);
-        if (response == null) {
-            return ResponseEntity.notFound().build();
-        }
-        return ResponseEntity.ok(response);
-    }
 
 
     @GetMapping("/usertest/{testId}")
@@ -79,9 +71,16 @@ public class TestController {
 
     // Tạo test mới
 
-
-
-
+    /** Gắn câu hỏi từ kho vào part của đề (chỉ tạo test_questions). Không tạo câu hỏi mới. */
+    @PostMapping("/parts/questions")
+    public ResponseEntity<Void> addQuestionsToTestPart(@RequestBody AddQuestionsToTestRequest request) {
+        try {
+            testService.addQuestionsToTestPart(request);
+            return ResponseEntity.noContent().build();
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
 
     // Cập nhật test
     @PutMapping("/{id}")

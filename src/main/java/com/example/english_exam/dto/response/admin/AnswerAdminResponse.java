@@ -6,8 +6,11 @@ import lombok.*;
 @Getter
 @Setter
 @NoArgsConstructor
-@AllArgsConstructor
 public class AnswerAdminResponse extends AnswerResponse {
     private Boolean isCorrect;
 
+    public AnswerAdminResponse(Long answerId, String answerText, Boolean isCorrect, String answerLabel) {
+        super(answerId, answerText, answerLabel);
+        this.isCorrect = isCorrect;
+    }
 }
