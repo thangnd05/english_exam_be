@@ -108,7 +108,6 @@ public class ChapterService {
         Chapter chapter = chapterRepository.findById(chapterId)
                 .orElseThrow(() -> new RuntimeException("Chapter not found"));
 
-        // ✅ Check teacher quyền của class hiện tại
         checkTeacherPermission(chapter.getClassId(), currentUserId);
 
         if (request.getClassId() != null &&
@@ -116,7 +115,6 @@ public class ChapterService {
             throw new RuntimeException("You cannot change classId of a chapter");
         }
 
-        // ✅ Update allowed fields only
         chapter.setTitle(request.getTitle());
         chapter.setDescription(request.getDescription());
 

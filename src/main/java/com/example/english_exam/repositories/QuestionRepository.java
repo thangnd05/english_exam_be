@@ -49,4 +49,19 @@ public interface QuestionRepository extends JpaRepository<Question, Long> {
     @Query("SELECT COUNT(q) FROM Question q WHERE q.examPartId = :examPartId AND q.classId = :classId")
     long countByExamPartIdAndClassId(@Param("examPartId") Long examPartId,
                                      @Param("classId") Long classId);
+
+
+    @Query("""
+        SELECT q FROM Question q
+        WHERE q.examPartId = :examPartId
+          AND q.classId = :classId
+          AND q.chapterId = :chapterId
+        ORDER BY function('RAND')
+    """)
+    List<Question> findRandomQuestionsByExamPartIdAndClassIdAndChapterId(
+            Long examPartId,
+            Long classId,
+            Long chapterId,
+            Pageable pageable
+    );
 }

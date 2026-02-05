@@ -1,5 +1,6 @@
 package com.example.english_exam.controllers;
 
+import com.example.english_exam.dto.request.CreateChapterTestRequest;
 import com.example.english_exam.dto.request.CreateTestWithQuestionsRequest;
 import com.example.english_exam.dto.request.TestRequest;
 import com.example.english_exam.dto.response.admin.TestAdminResponse;
@@ -282,6 +283,21 @@ Bước 4: .toList() - Chuyển stream kết quả thành List
         TestResponse response = testService.updateTestFromQuestionBank(testId, request, bannerFile, httpRequest);
         return ResponseEntity.ok(response);
     }
+
+
+    @PostMapping("/class/chapter")
+    public ResponseEntity<TestResponse> createChapterTest(
+            @RequestBody CreateChapterTestRequest request,
+            @RequestParam(required = false) MultipartFile banner,
+            HttpServletRequest httpRequest
+    ) throws IOException {
+
+        return ResponseEntity.ok(
+                testService.createTestForChapter(request, banner, httpRequest)
+        );
+    }
+
+
 
 
 

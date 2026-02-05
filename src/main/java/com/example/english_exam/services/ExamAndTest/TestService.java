@@ -49,6 +49,36 @@ public class TestService {
     private final UserTestService userTestService;
     private final ClassRepository classRepository;
     private final ClassMemberRepository classMemberRepository;
+    private final ChapterRepository chapterRepository;
+    private final QuestionService questionService;
+
+
+    private Test createEmptyTest(CreateTestWithQuestionsRequest request,
+                                 MultipartFile bannerFile,
+                                 Long currentUserId) throws IOException {
+
+        Test test = new Test();
+        test.setTitle(request.getTitle());
+        test.setDescription(request.getDescription());
+        test.setExamTypeId(request.getExamTypeId());
+        test.setCreatedBy(currentUserId);
+        test.setCreatedAt(LocalDateTime.now());
+        test.setDurationMinutes(request.getDurationMinutes());
+        test.setAvailableFrom(request.getAvailableFrom());
+        test.setAvailableTo(request.getAvailableTo());
+        test.setMaxAttempts(request.getMaxAttempts());
+
+        if (request.getClassId() != null) {
+            test.setClassId(request.getClassId());
+        }
+
+        if (bannerFile != null && !bannerFile.isEmpty()) {
+            String url = cloudinaryService.uploadImage(bannerFile);
+            test.setBannerUrl(url);
+        }
+
+        return testRepository.save(test);
+    }
 
     @Transactional
     public TestResponse createTestFromQuestionBank(TestRequest request,
@@ -618,168 +648,59 @@ public class TestService {
     }
 
     @Transactional
-    public TestResponse createTestWithNewQuestions(CreateTestWithQuestionsRequest request,
-                                                   MultipartFile bannerFile,
-                                                   List<MultipartFile> audioFiles,
-                                                   HttpServletRequest httpRequest) throws IOException {
-
+    public TestResponse createTestWithNewQuestions(
+            CreateTestWithQuestionsRequest request,
+            MultipartFile bannerFile,
+            List<MultipartFile> audioFiles,
+            HttpServletRequest httpRequest) throws IOException {
 
         Long currentUserId = authUtils.getUserId(httpRequest);
 
-        // === BƯỚC 1: TẠO TEST CHÍNH ===
-        ExamType examType = examTypeRepository.findById(request.getExamTypeId())
-                .orElseThrow(() -> new RuntimeException("ExamType not found with id: " + request.getExamTypeId()));
-
-        Test test = new Test();
-        test.setTitle(request.getTitle());
-        test.setDescription(request.getDescription());
-        test.setExamTypeId(request.getExamTypeId());
-        test.setCreatedBy(currentUserId); // ✅ Gán theo user đăng nhập thật
-        test.setCreatedAt(LocalDateTime.now());
-        test.setDurationMinutes(request.getDurationMinutes());
-        test.setAvailableFrom(request.getAvailableFrom());
-        test.setAvailableTo(request.getAvailableTo());
-        test.setMaxAttempts(request.getMaxAttempts());
-
-        // 🔹 Gắn classId nếu có (có thể null)
-        if (request.getClassId() != null) {
-            test.setClassId(request.getClassId());
-        }
-
-        if (bannerFile != null && !bannerFile.isEmpty()) {
-            String url = cloudinaryService.uploadImage(bannerFile);
-            test.setBannerUrl(url);
-        }
-
-        test = testRepository.save(test);
+        // ✅ 1. Tạo test
+        Test test = createEmptyTest(request, bannerFile, currentUserId);
 
         List<TestPartResponse> partResponses = new ArrayList<>();
-        int audioIndex = 0; // Đếm audio cho từng passage LISTENING
 
-        // === BƯỚC 2: LẶP QUA PARTS ===
+        // ✅ 2. Lặp PART
         for (PartWithQuestionsRequest partReq : request.getParts()) {
+
             TestPart testPart = new TestPart();
             testPart.setTestId(test.getTestId());
             testPart.setExamPartId(partReq.getExamPartId());
             testPart.setNumQuestions(partReq.getQuestions().size());
             testPart = testPartRepository.save(testPart);
 
-            Long passageId = null;
-            PassageResponse passageResponse = null;
-
-            // === TẠO PASSAGE ===
-            if (partReq.getPassage() != null) {
-                Passage newPassage = new Passage();
-                newPassage.setContent(partReq.getPassage().getContent());
-                newPassage.setPassageType(partReq.getPassage().getPassageType());
-
-                // === Nếu là LISTENING thì lấy file audio tương ứng ===
-                if (newPassage.getPassageType() == Passage.PassageType.LISTENING) {
-                    if (audioFiles != null && audioIndex < audioFiles.size()) {
-                        MultipartFile audioFile = audioFiles.get(audioIndex);
-                        if (audioFile != null && !audioFile.isEmpty()) {
-                            // 🟢 Upload audio lên Cloudinary
-                            String audioUrl = cloudinaryService.uploadAudio(audioFile);
-                            newPassage.setMediaUrl(audioUrl);
-                            System.out.println("✅ Uploaded audio for passage: " + newPassage.getContent());
-                        } else {
-                            System.out.println("⚠️ Audio file " + audioIndex + " is empty or null");
-                        }
-                    } else {
-                        System.out.println("⚠️ No audio file provided for passage index " + audioIndex);
-                    }
-                    audioIndex++; // chỉ tăng khi passage là LISTENING
-                } else {
-                    newPassage.setMediaUrl(partReq.getPassage().getMediaUrl());
-                }
-
-                Passage savedPassage = passageRepository.save(newPassage);
-                passageId = savedPassage.getPassageId();
-
-                passageResponse = new PassageResponse(
-                        savedPassage.getPassageId(),
-                        savedPassage.getContent(),
-                        savedPassage.getMediaUrl(),
-                        savedPassage.getPassageType()
-                );
-            }
-
-            // === LẶP QUA CÂU HỎI ===
             List<QuestionResponse> questionResponses = new ArrayList<>();
 
-            for (NormalQuestionRequest questionReq : partReq.getQuestions()) {
-                Question newQuestion = new Question();
-                newQuestion.setExamPartId(testPart.getExamPartId());
-                newQuestion.setPassageId(passageId);
-                newQuestion.setQuestionText(questionReq.getQuestionText());
-                newQuestion.setQuestionType(questionReq.getQuestionType());
-                newQuestion.setCreatedBy(currentUserId);
-                newQuestion = questionRepository.save(newQuestion);
+            // ✅ 3. GỌI SERVICE TẠO QUESTION
+            for (NormalQuestionRequest qReq : partReq.getQuestions()) {
 
-                List<Answer> newAnswers = new ArrayList<>();
-                if (questionReq.getAnswers() != null && !questionReq.getAnswers().isEmpty()) {
-                    List<Answer> answersToSave = new ArrayList<>();
-                    for (AnswerRequest ar : questionReq.getAnswers()) {
-                        Answer ans = new Answer();
-                        ans.setQuestionId(newQuestion.getQuestionId());
-                        ans.setAnswerText(ar.getAnswerText());
-                        ans.setAnswerLabel(ar.getLabel() != null ? ar.getLabel() : "");
-                        ans.setIsCorrect(ar.getIsCorrect() != null && ar.getIsCorrect());
-                        answersToSave.add(ans);
-                    }
-                    newAnswers = answerRepository.saveAll(answersToSave);
-                }
+                QuestionRequest qr = new QuestionRequest();
+                qr.setExamPartId(partReq.getExamPartId());
+                qr.setQuestionText(qReq.getQuestionText());
+                qr.setQuestionType(qReq.getQuestionType());
+                qr.setAnswers(qReq.getAnswers());
+                qr.setClassId(request.getClassId());
+                qr.setTestPartId(testPart.getTestPartId());
 
-                TestQuestion link = new TestQuestion();
-                link.setTestPartId(testPart.getTestPartId());
-                link.setQuestionId(newQuestion.getQuestionId());
-                testQuestionRepository.save(link);
+                QuestionAdminResponse created =
+                        questionService.createQuestionWithAnswersAdmin(qr, httpRequest);
 
-                List<AnswerResponse> answerResponses = newAnswers.stream()
-                        .map(ans -> new AnswerResponse(ans.getAnswerId(), ans.getAnswerText(), ans.getAnswerLabel()))
-                        .collect(Collectors.toList());
-
-                questionResponses.add(new QuestionResponse(
-                        newQuestion.getQuestionId(),
-                        testPart.getExamPartId(),
-                        newQuestion.getQuestionText(),
-                        newQuestion.getQuestionType(),
-                        null,
-                        testPart.getTestPartId(),
-                        answerResponses
-                ));
+                // link đã nằm trong service kia rồi
             }
 
-            // === Build TestPartResponse ===
             partResponses.add(new TestPartResponse(
                     testPart.getTestPartId(),
                     testPart.getExamPartId(),
                     testPart.getNumQuestions(),
-                    passageResponse,
+                    null,
                     questionResponses
             ));
         }
 
-        // === BƯỚC 3: TRẢ VỀ RESPONSE ===
-        return new TestResponse(
-                test.getTestId(),
-                test.getTitle(),
-                test.getDescription(),
-                test.getExamTypeId(),
-                test.getCreatedBy(),
-                test.getCreatedAt(),
-                test.getBannerUrl(),
-                test.getDurationMinutes(),
-                test.getAvailableFrom(),
-                test.getAvailableTo(),
-                test.calculateStatus().name(),
-                test.getMaxAttempts(),
-                0,
-                test.getMaxAttempts(),
-                true,
-                partResponses
-        );
+        return new TestResponse(test);
     }
+
 
 
     @Transactional
@@ -985,6 +906,96 @@ public class TestService {
         dto.setParts(partResponses);
         return dto;
     }
+
+    @Transactional
+    public TestResponse createTestForChapter(CreateChapterTestRequest request,
+                                             MultipartFile bannerFile,
+                                             HttpServletRequest httpRequest) throws IOException {
+
+        Long currentUserId = authUtils.getUserId(httpRequest);
+
+        Long classId = request.getClassId();
+        Long chapterId = request.getChapterId();
+
+        // ✅ Check teacher permission
+        ClassEntity clazz = classRepository.findById(classId)
+                .orElseThrow(() -> new RuntimeException("Class not found"));
+
+        System.out.println("Teacher in DB = " + clazz.getTeacherId());
+        System.out.println("Current user = " + currentUserId);
+
+        if (!clazz.getTeacherId().equals(currentUserId)) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "You are not teacher of this class"
+            );
+        }
+
+
+        // ✅ Check chapter belongs to class
+        Chapter chapter = chapterRepository.findById(chapterId)
+                .orElseThrow(() -> new RuntimeException("Chapter not found"));
+
+        if (!chapter.getClassId().equals(classId)) {
+            throw new RuntimeException("Chapter does not belong to this class");
+        }
+
+        // ============================
+        // ✅ Create Test
+        // ============================
+        Test test = new Test();
+        test.setTitle(request.getTitle());
+        test.setDescription(request.getDescription());
+        test.setExamTypeId(request.getExamTypeId());
+        test.setCreatedBy(currentUserId);
+        test.setCreatedAt(LocalDateTime.now());
+
+        test.setDurationMinutes(request.getDurationMinutes());
+        test.setAvailableFrom(parseDate(request.getAvailableFrom()));
+        test.setAvailableTo(parseDate(request.getAvailableTo()));
+        test.setMaxAttempts(request.getMaxAttempts());
+
+        test.setClassId(classId);
+        test.setChapterId(chapterId);
+
+        if (bannerFile != null && !bannerFile.isEmpty()) {
+            test.setBannerUrl(cloudinaryService.uploadImage(bannerFile));
+        }
+
+        testRepository.save(test);
+
+        // ============================
+        // ✅ Random questions per part
+        // ============================
+        for (ChapterPartRequest partReq : request.getParts()) {
+
+            TestPart testPart = new TestPart();
+            testPart.setTestId(test.getTestId());
+            testPart.setExamPartId(partReq.getExamPartId());
+            testPart.setNumQuestions(partReq.getNumQuestions());
+
+            testPartRepository.save(testPart);
+
+            // random đúng chapter
+            List<Question> randomQuestions =
+                    questionRepository.findRandomQuestionsByExamPartIdAndClassIdAndChapterId(
+                            partReq.getExamPartId(),
+                            classId,
+                            chapterId,
+                            PageRequest.of(0, partReq.getNumQuestions())
+                    );
+
+            for (Question q : randomQuestions) {
+                TestQuestion tq = new TestQuestion();
+                tq.setTestPartId(testPart.getTestPartId());
+                tq.setQuestionId(q.getQuestionId());
+                testQuestionRepository.save(tq);
+            }
+        }
+
+        return new TestResponse(test);
+    }
+
 
 
 

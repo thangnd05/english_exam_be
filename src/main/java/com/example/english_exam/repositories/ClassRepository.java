@@ -17,5 +17,5 @@ public interface ClassRepository extends JpaRepository<ClassEntity, Long> {
 
     Optional<ClassEntity> findByclassId(Long classId);
 
-    boolean existsByClassIdAndTeacherId(Long classId, Long UserId);
+    boolean existsByClassIdAndTeacherId(Long classId, Long teacherId);
 }

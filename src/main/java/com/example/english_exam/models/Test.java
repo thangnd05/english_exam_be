@@ -48,6 +48,9 @@ public class Test {
     @Column(name = "class_id")
     private Long classId; // FK -> exam_parts
 
+    @Column(name ="chapter_id")
+    private Long chapterId;
+
 
 
     // ✅ Method tính trạng thái thực tế
