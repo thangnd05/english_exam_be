@@ -1,12 +1,10 @@
 package com.example.english_exam.services.ExamAndTest;
 
 import com.example.english_exam.cloudinary.CloudinaryService;
-import com.example.english_exam.dto.request.*;
 import com.example.english_exam.dto.response.*;
 import com.example.english_exam.dto.response.admin.AnswerAdminResponse;
 import com.example.english_exam.dto.response.admin.QuestionAdminResponse;
 import com.example.english_exam.dto.response.admin.TestAdminResponse;
-import com.example.english_exam.dto.response.admin.TestPartAdminResponse;
 import com.example.english_exam.dto.response.user.AnswerResponse;
 import com.example.english_exam.dto.response.user.QuestionResponse;
 import com.example.english_exam.dto.response.user.TestPartResponse;
@@ -17,14 +15,10 @@ import com.example.english_exam.util.AuthUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.transaction.Transactional;
 import lombok.AllArgsConstructor;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -53,144 +47,7 @@ public class TestService {
     private final QuestionService questionService;
 
 
-    private Test createEmptyTest(CreateTestWithQuestionsRequest request,
-                                 MultipartFile bannerFile,
-                                 Long currentUserId) throws IOException {
 
-        Test test = new Test();
-        test.setTitle(request.getTitle());
-        test.setDescription(request.getDescription());
-        test.setExamTypeId(request.getExamTypeId());
-        test.setCreatedBy(currentUserId);
-        test.setCreatedAt(LocalDateTime.now());
-        test.setDurationMinutes(request.getDurationMinutes());
-        test.setAvailableFrom(request.getAvailableFrom());
-        test.setAvailableTo(request.getAvailableTo());
-        test.setMaxAttempts(request.getMaxAttempts());
-
-        if (request.getClassId() != null) {
-            test.setClassId(request.getClassId());
-        }
-
-        if (bannerFile != null && !bannerFile.isEmpty()) {
-            String url = cloudinaryService.uploadImage(bannerFile);
-            test.setBannerUrl(url);
-        }
-
-        return testRepository.save(test);
-    }
-
-    @Transactional
-    public TestResponse createTestFromQuestionBank(TestRequest request,
-                                                   MultipartFile bannerFile,
-                                                   HttpServletRequest httpRequest) throws IOException {
-
-        // === 1️⃣ Lấy thông tin người tạo ===
-        Long currentUserId = authUtils.getUserId(httpRequest);
-
-        // === 2️⃣ Tạo Test chính ===
-        Test test = new Test();
-        test.setTitle(request.getTitle());
-        test.setDescription(request.getDescription());
-        test.setExamTypeId(request.getExamTypeId());
-        test.setCreatedBy(currentUserId);
-        test.setDurationMinutes(request.getDurationMinutes());
-        test.setCreatedAt(LocalDateTime.now());
-        test.setAvailableFrom(parseDate(request.getAvailableFrom()));
-        test.setAvailableTo(parseDate(request.getAvailableTo()));
-        test.setMaxAttempts(request.getMaxAttempts());
-
-        // 🔹 Gắn classId nếu có (có thể null)
-        Long classId = request.getClassId();
-        if (classId != null) {
-            test.setClassId(classId);
-        }
-
-        // 🔹 Upload banner nếu có
-        if (bannerFile != null && !bannerFile.isEmpty()) {
-            String url = cloudinaryService.uploadImage(bannerFile);
-            test.setBannerUrl(url);
-        }
-
-        testRepository.save(test);
-
-        // === 3️⃣ Tạo các phần (Part) của bài thi ===
-        for (PartRequest partReq : request.getParts()) {
-            if (partReq.getExamPartId() == null) continue;
-
-            TestPart testPart = new TestPart();
-            testPart.setTestId(test.getTestId());
-            testPart.setExamPartId(partReq.getExamPartId());
-
-            // ✅ Tính số lượng câu hỏi
-            int numQs = 0;
-            if (Boolean.TRUE.equals(partReq.isRandom())) {
-                numQs = partReq.getNumQuestions() != null ? partReq.getNumQuestions() : 0;
-            } else if (partReq.getQuestionIds() != null) {
-                numQs = partReq.getQuestionIds().size();
-            }
-            testPart.setNumQuestions(numQs);
-            testPartRepository.save(testPart);
-
-            // === 4️⃣ Random hoặc chọn thủ công câu hỏi ===
-            if (partReq.isRandom()) {
-                if (numQs <= 0) continue;
-
-                // 🧠 Random 1 câu để kiểm tra có passage không
-                Question anyQ = (classId != null)
-                        ? questionRepository.findOneRandomQuestionByClass(partReq.getExamPartId(), classId)
-                        : questionRepository.findOneRandomQuestion(partReq.getExamPartId());
-                if (anyQ == null) continue;
-
-                if (anyQ.getPassageId() != null) {
-                    // 🔹 Lấy toàn bộ câu hỏi cùng passage, vẫn lọc theo classId của câu hỏi
-                    List<Question> group = (classId != null)
-                            ? questionRepository.findByPassageIdAndClassId(anyQ.getPassageId(), classId)
-                            : questionRepository.findByPassageId(anyQ.getPassageId());
-
-                    for (Question q : group) {
-                        TestQuestion tq = new TestQuestion();
-                        tq.setTestPartId(testPart.getTestPartId());
-                        tq.setQuestionId(q.getQuestionId());
-                        testQuestionRepository.save(tq);
-                    }
-                } else {
-                    // 🔹 Random độc lập
-                    List<Question> randomQuestions = (classId != null)
-                            ? questionRepository.findRandomQuestionsByExamPartIdAndClassId(
-                            partReq.getExamPartId(), classId, PageRequest.of(0, numQs))
-                            : questionRepository.findRandomQuestionsByExamPartId(
-                            partReq.getExamPartId(), PageRequest.of(0, numQs));
-
-                    for (Question q : randomQuestions) {
-                        TestQuestion tq = new TestQuestion();
-                        tq.setTestPartId(testPart.getTestPartId());
-                        tq.setQuestionId(q.getQuestionId());
-                        testQuestionRepository.save(tq);
-                    }
-                }
-
-            } else {
-                // 🔹 Chọn thủ công
-                if (partReq.getQuestionIds() != null && !partReq.getQuestionIds().isEmpty()) {
-                    for (Long qid : partReq.getQuestionIds()) {
-                        if (classId != null) {
-                            Question q = questionRepository.findById(qid)
-                                    .orElseThrow(() -> new RuntimeException("Question not found"));
-                            if (!classId.equals(q.getClassId())) continue; // bỏ qua câu hỏi khác lớp
-                        }
-
-                        TestQuestion tq = new TestQuestion();
-                        tq.setTestPartId(testPart.getTestPartId());
-                        tq.setQuestionId(qid);
-                        testQuestionRepository.save(tq);
-                    }
-                }
-            }
-        }
-
-        return new TestResponse(test);
-    }
 
 
     private LocalDateTime parseDate(String input) {
@@ -647,181 +504,7 @@ public class TestService {
         return testRepository.findByCreatedBy(currentUserId);
     }
 
-    @Transactional
-    public TestResponse createTestWithNewQuestions(
-            CreateTestWithQuestionsRequest request,
-            MultipartFile bannerFile,
-            List<MultipartFile> audioFiles,
-            HttpServletRequest httpRequest) throws IOException {
 
-        Long currentUserId = authUtils.getUserId(httpRequest);
-
-        // ✅ 1. Tạo test
-        Test test = createEmptyTest(request, bannerFile, currentUserId);
-
-        List<TestPartResponse> partResponses = new ArrayList<>();
-
-        // ✅ 2. Lặp PART
-        for (PartWithQuestionsRequest partReq : request.getParts()) {
-
-            TestPart testPart = new TestPart();
-            testPart.setTestId(test.getTestId());
-            testPart.setExamPartId(partReq.getExamPartId());
-            testPart.setNumQuestions(partReq.getQuestions().size());
-            testPart = testPartRepository.save(testPart);
-
-            List<QuestionResponse> questionResponses = new ArrayList<>();
-
-            // ✅ 3. GỌI SERVICE TẠO QUESTION
-            for (NormalQuestionRequest qReq : partReq.getQuestions()) {
-
-                QuestionRequest qr = new QuestionRequest();
-                qr.setExamPartId(partReq.getExamPartId());
-                qr.setQuestionText(qReq.getQuestionText());
-                qr.setQuestionType(qReq.getQuestionType());
-                qr.setAnswers(qReq.getAnswers());
-                qr.setClassId(request.getClassId());
-                qr.setTestPartId(testPart.getTestPartId());
-
-                QuestionAdminResponse created =
-                        questionService.createQuestionWithAnswersAdmin(qr, httpRequest);
-
-                // link đã nằm trong service kia rồi
-            }
-
-            partResponses.add(new TestPartResponse(
-                    testPart.getTestPartId(),
-                    testPart.getExamPartId(),
-                    testPart.getNumQuestions(),
-                    null,
-                    questionResponses
-            ));
-        }
-
-        return new TestResponse(test);
-    }
-
-
-
-    @Transactional
-    public TestResponse updateTestFromQuestionBank(Long testId,
-                                                   TestRequest request,
-                                                   MultipartFile bannerFile,
-                                                   HttpServletRequest httpRequest) throws IOException {
-
-        // === 1️⃣ Lấy Test hiện có ===
-        Test existing = testRepository.findById(testId)
-                .orElseThrow(() -> new RuntimeException("Test not found with ID: " + testId));
-
-        Long currentUserId = authUtils.getUserId(httpRequest);
-        Long classId = request.getClassId();
-
-        // 🧩 Kiểm tra quyền sửa (chỉ người tạo hoặc admin)
-        if (!existing.getCreatedBy().equals(currentUserId)) {
-            throw new RuntimeException("❌ Bạn không có quyền sửa đề thi này!");
-        }
-
-        // === 2️⃣ Cập nhật thông tin chung ===
-        existing.setTitle(request.getTitle());
-        existing.setDescription(request.getDescription());
-        existing.setExamTypeId(request.getExamTypeId());
-        existing.setDurationMinutes(request.getDurationMinutes());
-        existing.setAvailableFrom(parseDate(request.getAvailableFrom()));
-        existing.setAvailableTo(parseDate(request.getAvailableTo()));
-        existing.setMaxAttempts(request.getMaxAttempts());
-        existing.setClassId(classId);
-
-        // 🖼️ Cập nhật banner nếu có file mới
-        if (bannerFile != null && !bannerFile.isEmpty()) {
-            String url = cloudinaryService.uploadImage(bannerFile);
-            existing.setBannerUrl(url);
-        }
-
-        testRepository.save(existing);
-
-        // === 3️⃣ Xóa phần và câu hỏi cũ ===
-        List<TestPart> oldParts = testPartRepository.findByTestId(testId);
-        for (TestPart tp : oldParts) {
-            testQuestionRepository.deleteByTestPartId(tp.getTestPartId());
-        }
-        testPartRepository.deleteAll(oldParts);
-
-        // === 4️⃣ Tạo lại các phần mới ===
-        for (PartRequest partReq : request.getParts()) {
-            if (partReq.getExamPartId() == null) continue;
-
-            TestPart testPart = new TestPart();
-            testPart.setTestId(existing.getTestId());
-            testPart.setExamPartId(partReq.getExamPartId());
-
-            int numQs = 0;
-            if (Boolean.TRUE.equals(partReq.isRandom())) {
-                numQs = partReq.getNumQuestions() != null ? partReq.getNumQuestions() : 0;
-            } else if (partReq.getQuestionIds() != null) {
-                numQs = partReq.getQuestionIds().size();
-            }
-            testPart.setNumQuestions(numQs);
-            testPartRepository.save(testPart);
-
-            // === 5️⃣ Random hoặc chọn thủ công ===
-            if (partReq.isRandom()) {
-                if (numQs <= 0) continue;
-
-                // 🧠 Random 1 câu để xác định passage
-                Question anyQ = (classId != null)
-                        ? questionRepository.findOneRandomQuestionByClass(partReq.getExamPartId(), classId)
-                        : questionRepository.findOneRandomQuestion(partReq.getExamPartId());
-                if (anyQ == null) continue;
-
-                if (anyQ.getPassageId() != null) {
-                    // 🔹 Lấy các câu cùng passage, vẫn lọc theo classId
-                    List<Question> group = (classId != null)
-                            ? questionRepository.findByPassageIdAndClassId(anyQ.getPassageId(), classId)
-                            : questionRepository.findByPassageId(anyQ.getPassageId());
-
-                    for (Question q : group) {
-                        TestQuestion tq = new TestQuestion();
-                        tq.setTestPartId(testPart.getTestPartId());
-                        tq.setQuestionId(q.getQuestionId());
-                        testQuestionRepository.save(tq);
-                    }
-                } else {
-                    // 🔹 Random độc lập
-                    List<Question> randomQuestions = (classId != null)
-                            ? questionRepository.findRandomQuestionsByExamPartIdAndClassId(
-                            partReq.getExamPartId(), classId, PageRequest.of(0, numQs))
-                            : questionRepository.findRandomQuestionsByExamPartId(
-                            partReq.getExamPartId(), PageRequest.of(0, numQs));
-
-                    for (Question q : randomQuestions) {
-                        TestQuestion tq = new TestQuestion();
-                        tq.setTestPartId(testPart.getTestPartId());
-                        tq.setQuestionId(q.getQuestionId());
-                        testQuestionRepository.save(tq);
-                    }
-                }
-
-            } else {
-                // 🔹 Thủ công
-                if (partReq.getQuestionIds() != null && !partReq.getQuestionIds().isEmpty()) {
-                    for (Long qid : partReq.getQuestionIds()) {
-                        if (classId != null) {
-                            Question q = questionRepository.findById(qid)
-                                    .orElseThrow(() -> new RuntimeException("Question not found"));
-                            if (!classId.equals(q.getClassId())) continue;
-                        }
-
-                        TestQuestion tq = new TestQuestion();
-                        tq.setTestPartId(testPart.getTestPartId());
-                        tq.setQuestionId(qid);
-                        testQuestionRepository.save(tq);
-                    }
-                }
-            }
-        }
-
-        return new TestResponse(existing);
-    }
 
     public TestAdminResponse getTestDetailForAdmin(Long testId) {
         Test test = testRepository.findById(testId)
@@ -907,94 +590,6 @@ public class TestService {
         return dto;
     }
 
-    @Transactional
-    public TestResponse createTestForChapter(CreateChapterTestRequest request,
-                                             MultipartFile bannerFile,
-                                             HttpServletRequest httpRequest) throws IOException {
-
-        Long currentUserId = authUtils.getUserId(httpRequest);
-
-        Long classId = request.getClassId();
-        Long chapterId = request.getChapterId();
-
-        // ✅ Check teacher permission
-        ClassEntity clazz = classRepository.findById(classId)
-                .orElseThrow(() -> new RuntimeException("Class not found"));
-
-        System.out.println("Teacher in DB = " + clazz.getTeacherId());
-        System.out.println("Current user = " + currentUserId);
-
-        if (!clazz.getTeacherId().equals(currentUserId)) {
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN,
-                    "You are not teacher of this class"
-            );
-        }
-
-
-        // ✅ Check chapter belongs to class
-        Chapter chapter = chapterRepository.findById(chapterId)
-                .orElseThrow(() -> new RuntimeException("Chapter not found"));
-
-        if (!chapter.getClassId().equals(classId)) {
-            throw new RuntimeException("Chapter does not belong to this class");
-        }
-
-        // ============================
-        // ✅ Create Test
-        // ============================
-        Test test = new Test();
-        test.setTitle(request.getTitle());
-        test.setDescription(request.getDescription());
-        test.setExamTypeId(request.getExamTypeId());
-        test.setCreatedBy(currentUserId);
-        test.setCreatedAt(LocalDateTime.now());
-
-        test.setDurationMinutes(request.getDurationMinutes());
-        test.setAvailableFrom(parseDate(request.getAvailableFrom()));
-        test.setAvailableTo(parseDate(request.getAvailableTo()));
-        test.setMaxAttempts(request.getMaxAttempts());
-
-        test.setClassId(classId);
-        test.setChapterId(chapterId);
-
-        if (bannerFile != null && !bannerFile.isEmpty()) {
-            test.setBannerUrl(cloudinaryService.uploadImage(bannerFile));
-        }
-
-        testRepository.save(test);
-
-        // ============================
-        // ✅ Random questions per part
-        // ============================
-        for (ChapterPartRequest partReq : request.getParts()) {
-
-            TestPart testPart = new TestPart();
-            testPart.setTestId(test.getTestId());
-            testPart.setExamPartId(partReq.getExamPartId());
-            testPart.setNumQuestions(partReq.getNumQuestions());
-
-            testPartRepository.save(testPart);
-
-            // random đúng chapter
-            List<Question> randomQuestions =
-                    questionRepository.findRandomQuestionsByExamPartIdAndClassIdAndChapterId(
-                            partReq.getExamPartId(),
-                            classId,
-                            chapterId,
-                            PageRequest.of(0, partReq.getNumQuestions())
-                    );
-
-            for (Question q : randomQuestions) {
-                TestQuestion tq = new TestQuestion();
-                tq.setTestPartId(testPart.getTestPartId());
-                tq.setQuestionId(q.getQuestionId());
-                testQuestionRepository.save(tq);
-            }
-        }
-
-        return new TestResponse(test);
-    }
 
 
 

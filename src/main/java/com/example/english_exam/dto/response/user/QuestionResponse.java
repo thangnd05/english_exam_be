@@ -1,8 +1,10 @@
 package com.example.english_exam.dto.response.user;
 
-import com.example.english_exam.dto.response.PassageResponse;
-import com.example.english_exam.models.Question.QuestionType;
-import lombok.*;
+import com.example.english_exam.models.Question;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.util.List;
 
@@ -11,14 +13,13 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class QuestionResponse {
-    private Long questionId;
-    private Long examPartId;
-    private String questionText;
-    private QuestionType questionType;
-    private String explanation;
-    private Long testPartId;
-    private List<AnswerResponse> answers;   // chỉ có answerId, answerText, answerLabel
+    protected Long questionId;
+    protected Long examPartId;
+    protected String questionText;
+    protected Question.QuestionType questionType;
+    protected String explanation;
 
-
-
+    protected Long testPartId;
+    protected List<AnswerResponse> answers;
 }
+

@@ -1,4 +1,3 @@
-// response/TestPartResponse.java
 package com.example.english_exam.dto.response.user;
 
 import com.example.english_exam.dto.response.PassageResponse;

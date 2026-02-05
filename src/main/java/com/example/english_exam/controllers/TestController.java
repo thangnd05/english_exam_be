@@ -1,8 +1,5 @@
 package com.example.english_exam.controllers;
 
-import com.example.english_exam.dto.request.CreateChapterTestRequest;
-import com.example.english_exam.dto.request.CreateTestWithQuestionsRequest;
-import com.example.english_exam.dto.request.TestRequest;
 import com.example.english_exam.dto.response.admin.TestAdminResponse;
 import com.example.english_exam.dto.response.user.TestResponse;
 import com.example.english_exam.models.Test;
@@ -82,20 +79,6 @@ public class TestController {
 
     // Tạo test mới
 
-    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<TestResponse> createTestFromQuestionBank(
-            @RequestParam("data") String dataJson,
-            @RequestPart(value = "banner", required = false) MultipartFile bannerFile,
-            HttpServletRequest httpRequest
-    ) throws IOException {
-
-        // ✅ Parse JSON sang DTO
-        TestRequest request = objectMapper.readValue(dataJson, TestRequest.class);
-        // ✅ Gọi service
-        TestResponse response = testService.createTestFromQuestionBank(request, bannerFile,httpRequest);
-
-        return ResponseEntity.ok(response);
-    }
 
 
 
@@ -213,43 +196,6 @@ Bước 4: .toList() - Chuyển stream kết quả thành List
         return ResponseEntity.ok(result);
     }
 
-    @PostMapping(path = "/create-with-questions", consumes = "multipart/form-data")
-    public ResponseEntity<?> createTestWithNewQuestions(
-            @RequestParam("testData") String testDataJson,
-            @RequestPart(value = "bannerFile", required = false) MultipartFile bannerFile,
-            @RequestPart(value = "audioFiles", required = false) List<MultipartFile> audioFiles,
-            HttpServletRequest httpRequest // 🆕 thêm dòng này để lấy token từ cookie
-    ) {
-        try {
-            // ✅ Parse JSON thành DTO
-            CreateTestWithQuestionsRequest request = objectMapper.readValue(
-                    testDataJson,
-                    CreateTestWithQuestionsRequest.class
-            );
-
-            // ✅ Gọi service và truyền request kèm HttpServletRequest
-            TestResponse newTest = testService.createTestWithNewQuestions(
-                    request,
-                    bannerFile,
-                    audioFiles,
-                    httpRequest // 🆕 truyền vào để service lấy userId
-            );
-
-            return ResponseEntity.status(HttpStatus.CREATED).body(newTest);
-
-        } catch (IOException e) {
-            e.printStackTrace();
-            return ResponseEntity
-                    .status(HttpStatus.BAD_REQUEST)
-                    .body("❌ Error processing test data: " + e.getMessage());
-        } catch (Exception e) {
-            e.printStackTrace();
-            return ResponseEntity
-                    .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("❌ Error creating test: " + e.getMessage());
-        }
-    }
-
     @GetMapping("/by-class/{classId}")
     public ResponseEntity<?> getTestsByClass(@PathVariable Long classId, HttpServletRequest request) {
         List<Test> tests = testService.getTestByClassId(classId, request);
@@ -270,31 +216,6 @@ Bước 4: .toList() - Chuyển stream kết quả thành List
         }
 
         return ResponseEntity.ok(tests.stream().map(TestResponse::new).toList());
-    }
-
-    @PutMapping(value = "/{testId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<TestResponse> updateTestFromQuestionBank(
-            @PathVariable Long testId,
-            @RequestParam("data") String dataJson,
-            @RequestPart(value = "banner", required = false) MultipartFile bannerFile,
-            HttpServletRequest httpRequest
-    ) throws IOException {
-        TestRequest request = objectMapper.readValue(dataJson, TestRequest.class);
-        TestResponse response = testService.updateTestFromQuestionBank(testId, request, bannerFile, httpRequest);
-        return ResponseEntity.ok(response);
-    }
-
-
-    @PostMapping("/class/chapter")
-    public ResponseEntity<TestResponse> createChapterTest(
-            @RequestBody CreateChapterTestRequest request,
-            @RequestParam(required = false) MultipartFile banner,
-            HttpServletRequest httpRequest
-    ) throws IOException {
-
-        return ResponseEntity.ok(
-                testService.createTestForChapter(request, banner, httpRequest)
-        );
     }
 
 

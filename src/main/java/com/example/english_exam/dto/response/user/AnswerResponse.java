@@ -1,13 +1,17 @@
 package com.example.english_exam.dto.response.user;
 
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 public class AnswerResponse {
-    private Long answerId;
-    private String answerText;
-    private String answerLabel; // đổi tên từ label
+    protected Long answerId;
+    protected String answerText;
+    protected String answerLabel;
 }
+

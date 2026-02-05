@@ -11,13 +11,13 @@ import java.util.List;
 @Getter
 @AllArgsConstructor
 @NoArgsConstructor
-public class QuestionRequest {
+public class QuestionCreateRequest {
     private Long examPartId;
-    private PassageRequest passage;
+    private Long classId;
+    private Long chapterId;
+    private PassageRequest passage; // optional
     private String questionText;
     private Question.QuestionType questionType;
     private List<AnswerRequest> answers;
-    private Long testPartId;
-    private Long classId;
-
 }
+
