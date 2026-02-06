@@ -1,6 +1,7 @@
 package com.example.english_exam.controllers;
 
 import com.example.english_exam.dto.request.AddQuestionsToTestRequest;
+import com.example.english_exam.dto.request.CreateTestRequest;
 import com.example.english_exam.dto.response.admin.TestAdminResponse;
 import com.example.english_exam.dto.response.user.TestResponse;
 import com.example.english_exam.models.Test;
@@ -16,6 +17,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -70,6 +72,40 @@ public class TestController {
 
 
     // Tạo test mới
+
+    // File: TestController.java
+
+    @PostMapping
+    public ResponseEntity<Test> createTest(@RequestBody CreateTestRequest request, HttpServletRequest httpRequest) {
+        try {
+            // 1. Lấy userId người tạo từ token (Dùng authUtils bạn đã có)
+            Long currentUserId = authUtils.getUserId(httpRequest);
+
+            // 2. Map dữ liệu từ DTO sang Model
+            Test test = new Test();
+            test.setTitle(request.getTitle());
+            test.setDescription(request.getDescription());
+            test.setExamTypeId(request.getExamTypeId());
+            test.setDurationMinutes(request.getDurationMinutes());
+            test.setBannerUrl(request.getBannerUrl());
+            test.setMaxAttempts(request.getMaxAttempts());
+            test.setClassId(request.getClassId());
+            test.setChapterId(request.getChapterId());
+            test.setAvailableFrom(request.getAvailableFrom());
+            test.setAvailableTo(request.getAvailableTo());
+
+            // Gán thông tin hệ thống
+            test.setCreatedBy(currentUserId);
+            test.setCreatedAt(LocalDateTime.now());
+
+            // 3. Lưu vào database thông qua service
+            Test savedTest = testService.save(test);
+
+            return ResponseEntity.status(HttpStatus.CREATED).body(savedTest);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+        }
+    }
 
     /** Gắn câu hỏi từ kho vào part của đề (chỉ tạo test_questions). Không tạo câu hỏi mới. */
     @PostMapping("/parts/questions")
