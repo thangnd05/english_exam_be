@@ -16,4 +16,7 @@ public interface TestRepository extends JpaRepository<Test, Long> {
     List<Test>findByCreatedBy(Long id);
 
     List<Test>findByClassId(Long classId);
+
+    List<Test> findByClassIdAndChapterId(Long classId, Long chapterId);
+
 }

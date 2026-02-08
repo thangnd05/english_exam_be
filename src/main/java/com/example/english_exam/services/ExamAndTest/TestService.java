@@ -495,6 +495,25 @@ public class TestService {
         return testRepository.findByClassId(classId);
     }
 
+    public List<Test> getTestByClassIdAndChapterId(Long classId,Long chapterId, HttpServletRequest request) {
+        // 🧩 Lấy user hiện tại từ token
+        Long currentUserId = authUtils.getUserId(request);
+        if (currentUserId == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "🔒 Bạn cần đăng nhập để xem bài kiểm tra.");
+        }
+
+        // 🧩 Kiểm tra quyền truy cập lớp
+        boolean isMember = classMemberRepository.existsByClassIdAndUserId(classId, currentUserId);
+        boolean isTeacher = classRepository.existsByClassIdAndTeacherId(classId, currentUserId);
+
+        if (!isMember && !isTeacher) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "❌ Bạn không có quyền xem bài kiểm tra của lớp này!");
+        }
+
+        // ✅ Nếu hợp lệ, trả danh sách bài kiểm tra
+        return testRepository.findByClassIdAndChapterId(classId,chapterId);
+    }
+
 
     public List<Test> getTestByCreateBy(HttpServletRequest request) {
         // 🧩 Lấy user hiện tại từ token
