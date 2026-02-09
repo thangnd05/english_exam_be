@@ -173,45 +173,36 @@ Bước 4: .toList() - Chuyển stream kết quả thành List
     @GetMapping("/user/by-exam-type/{examTypeId}")
     public ResponseEntity<List<TestResponse>> getTestsByExamType(
             @PathVariable Long examTypeId,
-            HttpServletRequest httpRequest
+            HttpServletRequest request
     ) {
+
+        // 🔥 Lấy userId 1 lần và đảm bảo không bị gán lại
+        final Long currentUserId;
         try {
-            // ✅ 1. Lấy userId từ token (nếu có)
-            Long currentUserId = null;
-            try {
-                currentUserId = authUtils.getUserId(httpRequest);;
-            } catch (Exception ignored) {
-                // Nếu token không hợp lệ hoặc không có token, coi như người dùng chưa đăng nhập
-            }
-
-            // ✅ 2. Lấy danh sách bài thi theo examType và chỉ lấy test chưa thuộc class nào (classId = null)
-            List<Test> tests = testService.getAllTestsByAdmin()
-                    .stream()
-                    .filter(t -> t.getExamTypeId().equals(examTypeId))
-                    .filter(t -> t.getClassId() == null) // 🟢 chỉ lấy test chưa gán lớp
-                    .toList();
-
-            List<TestResponse> responses;
-
-            // ✅ 3. Nếu có userId → trả bản đầy đủ
-            if (currentUserId != null) {
-                responses = tests.stream()
-                        .map(test -> testService.getTestFullById(test.getTestId(), httpRequest))
-                        .toList();
-            } else {
-                // ✅ Nếu chưa đăng nhập → trả bản rút gọn
-                responses = tests.stream()
-                        .map(TestResponse::new)
-                        .toList();
-            }
-
-            return ResponseEntity.ok(responses);
-
+            currentUserId = authUtils.getUserId(request);
         } catch (Exception e) {
-            e.printStackTrace();
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
+            // Nếu không đăng nhập
+            return ResponseEntity.ok(
+                    testService.getAllTestsByAdmin()
+                            .stream()
+                            .filter(t -> t.getExamTypeId().equals(examTypeId))
+                            .filter(t -> t.getClassId() == null)
+                            .map(TestResponse::new)
+                            .toList()
+            );
         }
+
+        List<TestResponse> responses = testService.getAllTestsByAdmin()
+                .stream()
+                .filter(t -> t.getExamTypeId().equals(examTypeId))
+                .filter(t -> t.getClassId() == null)
+                .map(test -> testService.buildUserTestSummary(test, currentUserId))
+                .toList();
+
+        return ResponseEntity.ok(responses);
     }
+
+
 
 
 
@@ -254,15 +245,16 @@ Bước 4: .toList() - Chuyển stream kết quả thành List
     }
 
     @GetMapping("/my-tests")
-    public ResponseEntity<?> getMyPersonalTests(HttpServletRequest request) {
-        List<Test> tests = testService.getMyPersonalTests(request);
+    public ResponseEntity<List<TestResponse>> getMyPersonalTests(
+            HttpServletRequest request
+    ) {
+        List<TestResponse> responses =
+                testService.getMyPersonalTests(request);
 
-        if (tests.isEmpty()) {
-            return ResponseEntity.ok(Map.of("message", "Không có bài test nào trong lớp này"));
-        }
-
-        return ResponseEntity.ok(tests.stream().map(TestResponse::new).toList());
+        return ResponseEntity.ok(responses);
     }
+
+
 
 
 

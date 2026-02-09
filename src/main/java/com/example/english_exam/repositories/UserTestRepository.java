@@ -25,4 +25,7 @@ public interface UserTestRepository extends JpaRepository<UserTest, Long> {
 
 
     Optional<UserTest> findTopByUserIdAndTestIdOrderByStartedAtDesc(Long userId, Long testId);
+
+    long countByTestIdAndUserId(Long testId, Long userId);
+
 }

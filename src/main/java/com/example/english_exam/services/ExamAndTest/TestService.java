@@ -73,6 +73,30 @@ public class TestService {
         testRepository.deleteById(id);
     }
 
+    public TestResponse buildUserTestSummary(Test test, Long userId) {
+
+        TestResponse response = new TestResponse(test);
+
+        long attemptsUsed =
+                userTestRepository.countByTestIdAndUserId(
+                        test.getTestId(),
+                        userId
+                );
+
+        int maxAttempts =
+                test.getMaxAttempts() == null ? 1 : test.getMaxAttempts();
+
+        int remainingAttempts =
+                (int) Math.max(0, maxAttempts - attemptsUsed);
+
+        response.setAttemptsUsed((int) attemptsUsed);
+        response.setRemainingAttempts(remainingAttempts);
+        response.setCanDoTest(remainingAttempts > 0);
+
+        return response;
+    }
+
+
 
     public List<Test> getAllTestsByAdmin() {
         Role adminRole = roleRepository.findByRoleName("Admin");
@@ -526,16 +550,26 @@ public class TestService {
         return testRepository.findByCreatedBy(currentUserId);
     }
 
-    public List<Test> getMyPersonalTests(HttpServletRequest request) {
-        // 🧩 Lấy user hiện tại từ token
+    public List<TestResponse> getMyPersonalTests(HttpServletRequest request) {
+
         Long currentUserId = authUtils.getUserId(request);
         if (currentUserId == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "🔒 Bạn cần đăng nhập để xem bài kiểm tra.");
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "🔒 Bạn cần đăng nhập để xem bài kiểm tra."
+            );
         }
 
-        // ✅ Nếu hợp lệ, trả danh sách bài kiểm tra
-        return testRepository.findByCreatedByAndClassIdIsNullAndChapterIdIsNull(currentUserId);
+        List<Test> tests =
+                testRepository.findByCreatedByAndClassIdIsNullAndChapterIdIsNull(currentUserId);
+
+        return tests.stream()
+                .map(test -> buildUserTestSummary(test, currentUserId))
+                .toList();
     }
+
+
+
 
     /**
      * Gắn câu hỏi từ kho vào part của đề (chỉ tạo bản ghi test_questions).
