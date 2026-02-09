@@ -97,7 +97,6 @@ public class ClassController {
             return ResponseEntity.status(404).body(Map.of("error", e.getMessage()));
         }
     }
-    .
     @GetMapping("/{classId}/chapters/{chapterId}/tests")
     public ResponseEntity<?> getTestsByClassAndChapter(@PathVariable Long classId,@PathVariable Long chapterId, HttpServletRequest request) {
         List<Test> tests = testService.getTestByClassIdAndChapterId(classId,chapterId, request);

@@ -242,9 +242,20 @@ Bước 4: .toList() - Chuyển stream kết quả thành List
         return ResponseEntity.ok(tests.stream().map(TestResponse::new).toList());
     }
 
-    @GetMapping("/my-test")
+    @GetMapping("/my-all-test")
     public ResponseEntity<?> getTestsCreateBy(HttpServletRequest request) {
         List<Test> tests = testService.getTestByCreateBy(request);
+
+        if (tests.isEmpty()) {
+            return ResponseEntity.ok(Map.of("message", "Không có bài test nào trong lớp này"));
+        }
+
+        return ResponseEntity.ok(tests.stream().map(TestResponse::new).toList());
+    }
+
+    @GetMapping("/my-tests")
+    public ResponseEntity<?> getMyPersonalTests(HttpServletRequest request) {
+        List<Test> tests = testService.getMyPersonalTests(request);
 
         if (tests.isEmpty()) {
             return ResponseEntity.ok(Map.of("message", "Không có bài test nào trong lớp này"));

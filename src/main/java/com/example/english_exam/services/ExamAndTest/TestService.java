@@ -526,6 +526,17 @@ public class TestService {
         return testRepository.findByCreatedBy(currentUserId);
     }
 
+    public List<Test> getMyPersonalTests(HttpServletRequest request) {
+        // 🧩 Lấy user hiện tại từ token
+        Long currentUserId = authUtils.getUserId(request);
+        if (currentUserId == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "🔒 Bạn cần đăng nhập để xem bài kiểm tra.");
+        }
+
+        // ✅ Nếu hợp lệ, trả danh sách bài kiểm tra
+        return testRepository.findByCreatedByAndClassIdIsNullAndChapterIdIsNull(currentUserId);
+    }
+
     /**
      * Gắn câu hỏi từ kho vào part của đề (chỉ tạo bản ghi test_questions).
      * Câu hỏi phải đã tồn tại trong kho; không tạo câu hỏi mới ở đây.
