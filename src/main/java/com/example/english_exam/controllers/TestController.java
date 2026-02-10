@@ -1,6 +1,8 @@
 package com.example.english_exam.controllers;
 
 import com.example.english_exam.dto.request.AddQuestionsToTestRequest;
+import com.example.english_exam.dto.request.AddRandomQuestionsToTestRequest;
+import com.example.english_exam.dto.response.AddRandomQuestionsResponse;
 import com.example.english_exam.dto.request.CreateTestRequest;
 import com.example.english_exam.dto.response.admin.TestAdminResponse;
 import com.example.english_exam.dto.response.user.TestResponse;
@@ -117,6 +119,18 @@ public class TestController {
             return ResponseEntity.badRequest().build();
         }
     }
+
+//    /** Lấy câu hỏi random từ kho và gắn vào part. Body: testPartId, count, (optional) classId, chapterId. */
+//    @PostMapping("/parts/random-questions")
+//    public ResponseEntity<AddRandomQuestionsResponse> addRandomQuestionsToTestPart(
+//            @RequestBody AddRandomQuestionsToTestRequest request) {
+//        try {
+//            AddRandomQuestionsResponse response = testService.addRandomQuestionsToTestPart(request);
+//            return ResponseEntity.ok(response);
+//        } catch (RuntimeException e) {
+//            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
+//        }
+//    }
 
     // Cập nhật test
     @PutMapping("/{id}")

@@ -1,5 +1,6 @@
 package com.example.english_exam.dto.response.user;
 
+import com.example.english_exam.dto.response.PassageResponse;
 import com.example.english_exam.models.Question;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -11,7 +12,6 @@ import java.util.List;
 @Getter
 @Setter
 @NoArgsConstructor
-@AllArgsConstructor
 public class QuestionResponse {
     protected Long questionId;
     protected Long examPartId;
@@ -21,5 +21,17 @@ public class QuestionResponse {
 
     protected Long testPartId;
     protected List<AnswerResponse> answers;
+    protected PassageResponse passage;
+
+    public QuestionResponse(Long questionId, Long examPartId, String questionText, Question.QuestionType questionType, String explanation, Long testPartId, List<AnswerResponse> answers, PassageResponse passage) {
+        this.questionId = questionId;
+        this.examPartId = examPartId;
+        this.questionText = questionText;
+        this.questionType = questionType;
+        this.explanation = explanation;
+        this.testPartId = testPartId;
+        this.answers = answers;
+        this.passage = passage;
+    }
 }
 

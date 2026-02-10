@@ -119,38 +119,34 @@ public class TestService {
     @Transactional
     public TestResponse getTestFullById(Long testId, HttpServletRequest httpRequest) {
 
-        // === 0️⃣ Xác định người dùng hiện tại từ token ===
-        // Nếu không có userId → token hết hạn hoặc không hợp lệ
         Long currentUserId = authUtils.getUserId(httpRequest);
         if (currentUserId == null) {
-            throw new RuntimeException("Không xác định được người dùng. Token không hợp lệ hoặc đã hết hạn.");
+            throw new RuntimeException("Không xác định được người dùng.");
         }
 
-        // === 1️⃣ Lấy thông tin bài test theo ID ===
         Test test = testRepository.findById(testId)
                 .orElseThrow(() -> new RuntimeException("Test not found"));
 
-        // === 2️⃣ Kiểm tra nếu user có bài đang làm dở → auto submit nếu đã hết giờ ===
-        UserTest latest = userTestRepository.findTopByUserIdAndTestIdOrderByStartedAtDesc(currentUserId, testId)
+        // ================= AUTO SUBMIT IF TIME EXPIRED =================
+        UserTest latest = userTestRepository
+                .findTopByUserIdAndTestIdOrderByStartedAtDesc(currentUserId, testId)
                 .orElse(null);
 
         if (latest != null && latest.getStatus() == UserTest.Status.IN_PROGRESS) {
-            LocalDateTime now = LocalDateTime.now();
-            LocalDateTime endTime = latest.getStartedAt().plusMinutes(test.getDurationMinutes());
 
-            // Nếu bài thi có thời gian đóng cửa (availableTo) sớm hơn thời gian hết bài → cắt về thời điểm đó
-            if (test.getAvailableTo() != null && test.getAvailableTo().isBefore(endTime)) {
+            LocalDateTime now = LocalDateTime.now();
+            LocalDateTime endTime = latest.getStartedAt()
+                    .plusMinutes(test.getDurationMinutes());
+
+            if (test.getAvailableTo() != null &&
+                    test.getAvailableTo().isBefore(endTime)) {
                 endTime = test.getAvailableTo();
             }
 
-            // Nếu hiện tại >= thời điểm kết thúc → tự động nộp bài
-            if (now.isAfter(endTime) || now.isEqual(endTime)) {
-                System.out.println("⏰ Auto-submitting UserTest ID = " + latest.getUserTestId());
+            if (!now.isBefore(endTime)) {
                 try {
                     userTestService.submitTest(latest.getUserTestId());
                 } catch (Exception e) {
-                    System.err.println("⚠️ Auto-submit failed for UserTest " + latest.getUserTestId() + ": " + e.getMessage());
-                    // Nếu auto-submit lỗi → đánh dấu hoàn thành thủ công
                     latest.setStatus(UserTest.Status.COMPLETED);
                     latest.setFinishedAt(endTime);
                     userTestRepository.save(latest);
@@ -158,172 +154,184 @@ public class TestService {
             }
         }
 
-        // === 3️⃣ Tính số lượt làm còn lại cho người dùng hiện tại ===
-        TestStatus currentStatus = test.calculateStatus();
-
-        // Đếm số lần người dùng đã hoàn thành bài thi này
-        int attemptsUsed = userTestRepository.countByUserIdAndTestIdAndStatus(
-                currentUserId, testId, UserTest.Status.COMPLETED
-        );
+        // ================= ATTEMPTS =================
+        int attemptsUsed =
+                userTestRepository.countByUserIdAndTestIdAndStatus(
+                        currentUserId,
+                        testId,
+                        UserTest.Status.COMPLETED
+                );
 
         Integer maxAttempts = test.getMaxAttempts();
         Integer remaining = (maxAttempts != null)
                 ? Math.max(0, maxAttempts - attemptsUsed)
-                : null; // null nghĩa là không giới hạn lượt làm
+                : null;
 
-        // === 🔒 Nếu người dùng đã hết lượt thi, trả về response đặc biệt (không ném lỗi nữa) ===
         if (maxAttempts != null && remaining <= 0) {
             TestResponse blocked = new TestResponse(test);
-            blocked.setCanDoTest(false);  // 🚫 Không được làm bài nữa
+            blocked.setCanDoTest(false);
             blocked.setAttemptsUsed(attemptsUsed);
             blocked.setRemainingAttempts(remaining);
-            blocked.setStatus("FORBIDDEN"); // hiển thị rõ ràng trạng thái bị chặn
+            blocked.setStatus("FORBIDDEN");
             return blocked;
         }
 
-        // === 4️⃣ Lấy danh sách các phần thi (parts) của bài test ===
-        List<TestPart> testParts = testPartRepository.findByTestId(test.getTestId());
+        // ================= LOAD PARTS =================
+        List<TestPart> testParts =
+                testPartRepository.findByTestId(testId);
+
         if (testParts.isEmpty()) {
-            // Nếu test không có part → trả về rỗng (tránh lỗi null)
-            TestResponse res = new TestResponse();
-            res.setTestId(test.getTestId());
-            res.setTitle(test.getTitle());
-            res.setDescription(test.getDescription());
-            res.setExamTypeId(test.getExamTypeId());
-            res.setCreatedBy(test.getCreatedBy());
-            res.setCreatedAt(test.getCreatedAt());
-            res.setBannerUrl(test.getBannerUrl());
-            res.setDurationMinutes(test.getDurationMinutes());
-            res.setAvailableFrom(test.getAvailableFrom());
-            res.setAvailableTo(test.getAvailableTo());
-            res.setStatus(currentStatus.name());
-            res.setMaxAttempts(maxAttempts);
-            res.setAttemptsUsed(attemptsUsed);
-            res.setRemainingAttempts(remaining);
-            res.setParts(Collections.emptyList());
-            res.setCanDoTest(true); // ✅ Vẫn cho phép làm bài
-            return res;
+            return new TestResponse(
+                    test.getTestId(),
+                    test.getTitle(),
+                    test.getDescription(),
+                    test.getExamTypeId(),
+                    test.getCreatedBy(),
+                    test.getCreatedAt(),
+                    test.getBannerUrl(),
+                    test.getDurationMinutes(),
+                    test.getAvailableFrom(),
+                    test.getAvailableTo(),
+                    test.calculateStatus().name(),
+                    maxAttempts,
+                    attemptsUsed,
+                    remaining,
+                    true,
+                    Collections.emptyList()
+            );
         }
 
-        // === 5️⃣ Chuẩn bị dữ liệu câu hỏi & passage ===
-        List<Long> testPartIds = testParts.stream().map(TestPart::getTestPartId).toList();
+        List<Long> partIds =
+                testParts.stream()
+                        .map(TestPart::getTestPartId)
+                        .toList();
 
-        // Lấy toàn bộ câu hỏi của các part
-        List<TestQuestion> allTestQuestions = testQuestionRepository.findByTestPartIdIn(testPartIds);
+        List<TestQuestion> allTestQuestions =
+                testQuestionRepository.findByTestPartIdIn(partIds);
 
-        // Gom câu hỏi theo testPartId
-        Map<Long, List<TestQuestion>> questionsByPartId =
-                allTestQuestions.stream().collect(Collectors.groupingBy(TestQuestion::getTestPartId));
+        Map<Long, List<TestQuestion>> questionsByPart =
+                allTestQuestions.stream()
+                        .collect(Collectors.groupingBy(TestQuestion::getTestPartId));
 
-        // Lấy danh sách questionId thực tế
-        List<Long> allQuestionIds = allTestQuestions.stream()
-                .map(TestQuestion::getQuestionId)
-                .distinct()
-                .toList();
+        List<Long> questionIds =
+                allTestQuestions.stream()
+                        .map(TestQuestion::getQuestionId)
+                        .distinct()
+                        .toList();
 
-        // Load chi tiết Question trong bảng question
-        List<Question> questionList = allQuestionIds.isEmpty()
-                ? Collections.emptyList()
-                : questionRepository.findAllById(allQuestionIds);
+        Map<Long, Question> questionMap =
+                questionRepository.findAllById(questionIds)
+                        .stream()
+                        .collect(Collectors.toMap(Question::getQuestionId, q -> q));
 
-        // Map questionId → Question
-        Map<Long, Question> questionMap = questionList.stream()
-                .collect(Collectors.toMap(Question::getQuestionId, q -> q));
+        Set<Long> passageIds =
+                questionMap.values().stream()
+                        .map(Question::getPassageId)
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toSet());
 
-        // Lấy toàn bộ passage liên quan (đoạn đọc / nghe)
-        Set<Long> allPassageIds = questionMap.values().stream()
-                .map(Question::getPassageId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
+        Map<Long, Passage> passageMap =
+                passageIds.isEmpty()
+                        ? Collections.emptyMap()
+                        : passageRepository.findAllById(passageIds)
+                        .stream()
+                        .collect(Collectors.toMap(Passage::getPassageId, p -> p));
 
-        List<Passage> passageList = allPassageIds.isEmpty()
-                ? Collections.emptyList()
-                : passageRepository.findAllById(allPassageIds);
-
-        Map<Long, Passage> passageMap = passageList.stream()
-                .collect(Collectors.toMap(Passage::getPassageId, p -> p));
-
-        // Lấy danh sách đáp án cho nhiều câu hỏi cùng lúc
         Map<Long, List<AnswerResponse>> answersByQuestionId =
-                answerService.getAnswersForMultipleQuestions(allQuestionIds);
+                answerService.getAnswersForMultipleQuestions(questionIds);
 
-        // === 6️⃣ Xử lý từng phần thi (Part) ===
-        List<TestPartResponse> partResponses = testParts.stream().map(tp -> {
+        // ================= BUILD PART RESPONSES =================
+        List<TestPartResponse> partResponses =
+                testParts.stream().map(tp -> {
 
-            // 🟢 Lấy tất cả câu hỏi thuộc part này
-            List<TestQuestion> tqList = new ArrayList<>(
-                    questionsByPartId.getOrDefault(tp.getTestPartId(), Collections.emptyList())
-            );
+                    List<TestQuestion> tqList =
+                            questionsByPart.getOrDefault(
+                                    tp.getTestPartId(),
+                                    Collections.emptyList()
+                            );
 
-            // 🧩 Gom nhóm theo passage: cùng passageId thì cùng nhóm
-            // Nếu câu hỏi không có passage → nhóm vào -1 (câu lẻ)
-            Map<Long, List<TestQuestion>> groupedByPassage = tqList.stream()
-                    .collect(Collectors.groupingBy(tq -> {
-                        Question q = questionMap.get(tq.getQuestionId());
-                        return (q != null && q.getPassageId() != null) ? q.getPassageId() : -1L;
-                    }));
+                    Collections.shuffle(tqList);
 
-            // Danh sách nhóm (mỗi nhóm là 1 passage hoặc 1 câu lẻ)
-            List<List<TestQuestion>> questionGroups = new ArrayList<>(groupedByPassage.values());
+                    List<QuestionResponse> questionResponses =
+                            tqList.stream().map(tq -> {
 
-            // 🌀 Random thứ tự passage
-            Collections.shuffle(questionGroups);
-            // 🔀 Random thứ tự câu hỏi trong từng passage
-            for (List<TestQuestion> group : questionGroups) {
-                Collections.shuffle(group);
-            }
+                                        Question q =
+                                                questionMap.get(tq.getQuestionId());
+                                        if (q == null) return null;
 
-            // ✅ Gộp lại danh sách câu hỏi sau khi random
-            List<TestQuestion> randomizedTqList = questionGroups.stream()
-                    .flatMap(List::stream)
-                    .toList();
+                                        List<AnswerResponse> answers =
+                                                answersByQuestionId.getOrDefault(
+                                                        q.getQuestionId(),
+                                                        Collections.emptyList()
+                                                );
 
-            // === 7️⃣ Tạo PassageResponse (nếu có passage thật) ===
-            PassageResponse passageResponse = randomizedTqList.stream()
-                    .map(tq -> questionMap.get(tq.getQuestionId()))
-                    .filter(q -> q != null && q.getPassageId() != null)
-                    .findFirst()
-                    .map(q -> passageMap.get(q.getPassageId()))
-                    .filter(Objects::nonNull)
-                    .map(p -> new PassageResponse(
-                            p.getPassageId(), p.getContent(), p.getMediaUrl(), p.getPassageType()
-                    ))
-                    .orElse(null);
+                                        PassageResponse passageDto = null;
+                                        if (q.getPassageId() != null) {
+                                            Passage p =
+                                                    passageMap.get(q.getPassageId());
+                                            if (p != null) {
+                                                passageDto =
+                                                        new PassageResponse(
+                                                                p.getPassageId(),
+                                                                p.getContent(),
+                                                                p.getMediaUrl(),
+                                                                p.getPassageType()
+                                                        );
+                                            }
+                                        }
 
-            // === 8️⃣ Chuyển đổi danh sách câu hỏi + đáp án sang DTO QuestionResponse ===
-            List<QuestionResponse> questionResponses = randomizedTqList.stream()
-                    .map(tq -> {
-                        Question q = questionMap.get(tq.getQuestionId());
-                        if (q == null) return null;
+                                        return new QuestionResponse(
+                                                q.getQuestionId(),
+                                                q.getExamPartId(),
+                                                q.getQuestionText(),
+                                                q.getQuestionType(),
+                                                q.getExplanation(),
+                                                tp.getTestPartId(),
+                                                answers,
+                                                passageDto   // 👈 AUDIO PER QUESTION
+                                        );
 
-                        List<AnswerResponse> answers =
-                                answersByQuestionId.getOrDefault(q.getQuestionId(), Collections.emptyList());
+                                    })
+                                    .filter(Objects::nonNull)
+                                    .toList();
 
-                        return new QuestionResponse(
-                                q.getQuestionId(), q.getExamPartId(), q.getQuestionText(),
-                                q.getQuestionType(), q.getExplanation(), tp.getTestPartId(), answers
-                        );
-                    })
-                    .filter(Objects::nonNull)
-                    .toList();
+                    return new TestPartResponse(
+                            tp.getTestPartId(),
+                            tp.getExamPartId(),
+                            tp.getNumQuestions(),
+                            null,                 // ❌ không dùng passage cấp part
+                            questionResponses
+                    );
 
-            // === 9️⃣ Tạo DTO cho từng phần thi ===
-            return new TestPartResponse(
-                    tp.getTestPartId(), tp.getExamPartId(), tp.getNumQuestions(),
-                    passageResponse, questionResponses
-            );
-        }).toList();
+                }).toList();
 
-        // === 🔟 Trả về TestResponse hoàn chỉnh cho FE ===
+        // ================= FINAL RESPONSE =================
         return new TestResponse(
-                test.getTestId(), test.getTitle(), test.getDescription(), test.getExamTypeId(),
-                test.getCreatedBy(), test.getCreatedAt(), test.getBannerUrl(), test.getDurationMinutes(),
-                test.getAvailableFrom(), test.getAvailableTo(), currentStatus.name(),
-                maxAttempts, attemptsUsed, remaining,
-                true, // ✅ canDoTest = true (người dùng còn quyền làm bài)
+                test.getTestId(),
+                test.getTitle(),
+                test.getDescription(),
+                test.getExamTypeId(),
+                test.getCreatedBy(),
+                test.getCreatedAt(),
+                test.getBannerUrl(),
+                test.getDurationMinutes(),
+                test.getAvailableFrom(),
+                test.getAvailableTo(),
+                test.calculateStatus().name(),
+                maxAttempts,
+                attemptsUsed,
+                remaining,
+                true,
                 partResponses
         );
     }
+
+
+
+
+
+
+
 
 
     public TestAdminResponse getTestFullByIdAdmin(Long testId) {

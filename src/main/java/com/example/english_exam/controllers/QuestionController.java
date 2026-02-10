@@ -19,6 +19,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/questions")
@@ -81,19 +82,37 @@ public class QuestionController {
         }
     }
 
-    /** Tạo nhiều câu hỏi thông thường vào kho (không passage). */
-    @PostMapping(value = "/bulk", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+
+    @PostMapping(
+            value = "/bulk",
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE
+    )
     public ResponseEntity<List<QuestionAdminResponse>> createBulkQuestionsToBankNoPassage(
-            @RequestBody BulkCreateQuestionsToBankRequest request,
+            @RequestParam("request") String requestJson,
+            @RequestParam Map<String, MultipartFile> audioFiles,
             HttpServletRequest httpRequest
     ) {
+
         try {
-            List<QuestionAdminResponse> responses = questionService.createBulkQuestionsToBankNoPassage(request, httpRequest);
+
+            BulkCreateQuestionsToBankRequest request =
+                    objectMapper.readValue(requestJson, BulkCreateQuestionsToBankRequest.class);
+
+            List<QuestionAdminResponse> responses =
+                    questionService.createBulkQuestionsToBankNoPassage(
+                            request,
+                            httpRequest,
+                            audioFiles
+                    );
+
             return ResponseEntity.status(HttpStatus.CREATED).body(responses);
-        } catch (RuntimeException e) {
+
+        } catch (Exception e) {
             return ResponseEntity.badRequest().build();
         }
     }
+
 
     @PostMapping(value = "/bulk-with-passage", consumes = MediaType.MULTIPART_FORM_DATA_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<List<QuestionAdminResponse>> createBulkQuestionsToBank(
@@ -112,19 +131,36 @@ public class QuestionController {
         }
     }
 
-    /** Tạo câu hỏi tức thì và gắn thẳng vào part của đề (isBank = false, không lưu kho). */
-    @PostMapping(value = "/create-and-attach", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    @PostMapping(
+            value = "/create-and-attach",
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE
+    )
     public ResponseEntity<QuestionAdminResponse> createQuestionAndAttachToTest(
-            @RequestBody CreateQuestionAndAttachRequest request,
+            @RequestParam("request") String requestJson,
+            @RequestParam(value = "audio", required = false) MultipartFile audioFile,
             HttpServletRequest httpRequest
     ) {
+
         try {
-            QuestionAdminResponse response = questionService.createQuestionAndAttachToTest(request, httpRequest);
+
+            CreateQuestionAndAttachRequest request =
+                    objectMapper.readValue(requestJson, CreateQuestionAndAttachRequest.class);
+
+            QuestionAdminResponse response =
+                    questionService.createQuestionAndAttachToTest(
+                            request,
+                            httpRequest,
+                            audioFile
+                    );
+
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
-        } catch (RuntimeException e) {
+
+        } catch (Exception e) {
             return ResponseEntity.badRequest().build();
         }
     }
+
 
     // =================== DELETE ===================
 

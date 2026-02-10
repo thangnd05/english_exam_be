@@ -1,4 +1,3 @@
-// ScoringConversionService.java
 package com.example.english_exam.services.ExamAndTest;
 
 import com.example.english_exam.models.ScoringConversion;
@@ -33,7 +32,7 @@ public class ScoringConversionService {
         scoringConversionRepository.deleteById(id);
     }
 
-    public Optional<ScoringConversion> findConversion(Long examTypeId, Long skillId, Integer numCorrect) {
-        return scoringConversionRepository.findByExamTypeIdAndSkillIdAndNumCorrect(examTypeId, skillId, numCorrect);
-    }
+//    public Optional<ScoringConversion> findConversion(Long examTypeId, Long skillId, Integer numCorrect) {
+//        return scoringConversionRepository.findByExamTypeIdAndSkillIdAndNumCorrect(examTypeId, skillId, numCorrect);
+//    }
 }

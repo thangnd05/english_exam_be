@@ -19,6 +19,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -183,59 +184,128 @@ public class QuestionService {
      * Tạo nhiều câu hỏi thông thường vào kho (không passage). Mỗi câu độc lập.
      */
     @Transactional
-    public List<QuestionAdminResponse> createBulkQuestionsToBankNoPassage(BulkCreateQuestionsToBankRequest request,
-                                                                          HttpServletRequest httpRequest) {
+    public List<QuestionAdminResponse> createBulkQuestionsToBankNoPassage(
+            BulkCreateQuestionsToBankRequest request,
+            HttpServletRequest httpRequest,
+            Map<String, MultipartFile> audioFiles
+    ) throws IOException {
+
         Long currentUserId = authUtils.getUserId(httpRequest);
         if (currentUserId == null) {
             throw new RuntimeException("Không xác định được người dùng từ token.");
         }
+
         if (request.getQuestions() == null || request.getQuestions().isEmpty()) {
             return List.of();
         }
 
         List<QuestionAdminResponse> responses = new ArrayList<>();
-        for (NormalQuestionRequest qReq : request.getQuestions()) {
+
+        for (int i = 0; i < request.getQuestions().size(); i++) {
+
+            NormalQuestionRequest qReq = request.getQuestions().get(i);
+
             Question question = new Question();
             question.setExamPartId(request.getExamPartId());
             question.setPassageId(null);
             question.setQuestionText(qReq.getQuestionText());
             question.setQuestionType(qReq.getQuestionType());
             question.setCreatedBy(currentUserId);
-            if (request.getClassId() != null) question.setClassId(request.getClassId());
-            if (request.getChapterId() != null) question.setChapterId(request.getChapterId());
+
+            if (request.getClassId() != null)
+                question.setClassId(request.getClassId());
+
+            if (request.getChapterId() != null)
+                question.setChapterId(request.getChapterId());
+
             question.setIsBank(Boolean.TRUE);
+
             question = questionRepository.save(question);
 
-            List<Answer> savedAnswers = saveAnswersForQuestion(question.getQuestionId(), qReq.getAnswers(), qReq.getQuestionType());
+            // 🔥 xử lý audio từng câu
+            MultipartFile audioFile = audioFiles.get("audio_" + i);
+
+            if (audioFile != null && !audioFile.isEmpty()) {
+
+                Passage passage = new Passage();
+                passage.setContent("");
+                passage.setPassageType(Passage.PassageType.LISTENING);
+                passage.setMediaUrl(cloudinaryService.uploadAudio(audioFile));
+
+                passage = passageRepository.save(passage);
+
+                question.setPassageId(passage.getPassageId());
+                questionRepository.save(question);
+            }
+
+            List<Answer> savedAnswers = saveAnswersForQuestion(
+                    question.getQuestionId(),
+                    qReq.getAnswers(),
+                    qReq.getQuestionType()
+            );
+
             responses.add(buildQuestionAdminResponse(question, null, savedAnswers, null));
         }
+
         return responses;
     }
+
 
     /**
      * Tạo câu hỏi "tức thì" (isBank = false) và gắn thẳng vào part của đề.
      * Dùng khi giáo viên trên lớp đặt câu hỏi rồi đưa vào đề, không cần lưu kho.
      */
     @Transactional
-    public QuestionAdminResponse createQuestionAndAttachToTest(CreateQuestionAndAttachRequest request,
-                                                               HttpServletRequest httpRequest) {
+    public QuestionAdminResponse createQuestionAndAttachToTest(
+            CreateQuestionAndAttachRequest request,
+            HttpServletRequest httpRequest,
+            MultipartFile audioFile
+    ) throws IOException {
+
         Long currentUserId = authUtils.getUserId(httpRequest);
         if (currentUserId == null) {
             throw new RuntimeException("Không xác định được người dùng từ token.");
         }
+
         TestPart testPart = testPartRepository.findById(request.getTestPartId())
-                .orElseThrow(() -> new RuntimeException("TestPart không tồn tại: " + request.getTestPartId()));
+                .orElseThrow(() ->
+                        new RuntimeException("TestPart không tồn tại: " + request.getTestPartId())
+                );
 
         Long passageId = null;
         Passage savedPassage = null;
-        if (request.getPassage() != null && hasPassageContent(request.getPassage())) {
+
+// 🔥 Nếu có audio HOẶC có passage content → tạo Passage
+        if ((audioFile != null && !audioFile.isEmpty())
+                || (request.getPassage() != null && hasPassageContent(request.getPassage()))) {
+
             Passage passage = new Passage();
-            passage.setContent(request.getPassage().getContent() != null ? request.getPassage().getContent() : "");
-            passage.setMediaUrl(request.getPassage().getMediaUrl());
-            passage.setPassageType(request.getPassage().getPassageType());
+
+            // content (nếu có)
+            if (request.getPassage() != null) {
+                passage.setContent(
+                        request.getPassage().getContent() != null
+                                ? request.getPassage().getContent()
+                                : ""
+                );
+                passage.setPassageType(request.getPassage().getPassageType());
+            } else {
+                // nếu chỉ có audio
+                passage.setContent("");
+                passage.setPassageType(Passage.PassageType.LISTENING);
+            }
+
+            // xử lý audio
+            if (audioFile != null && !audioFile.isEmpty()) {
+                passage.setMediaUrl(cloudinaryService.uploadAudio(audioFile));
+            } else if (request.getPassage() != null) {
+                passage.setMediaUrl(request.getPassage().getMediaUrl());
+            }
+
             savedPassage = passageRepository.save(passage);
             passageId = savedPassage.getPassageId();
         }
+
 
         Question question = new Question();
         question.setExamPartId(testPart.getExamPartId());
@@ -243,19 +313,33 @@ public class QuestionService {
         question.setQuestionText(request.getQuestionText());
         question.setQuestionType(request.getQuestionType());
         question.setCreatedBy(currentUserId);
-        if (request.getClassId() != null) question.setClassId(request.getClassId());
-        if (request.getChapterId() != null) question.setChapterId(request.getChapterId());
         question.setIsBank(Boolean.FALSE);
+
+        if (request.getClassId() != null)
+            question.setClassId(request.getClassId());
+
+        if (request.getChapterId() != null)
+            question.setChapterId(request.getChapterId());
+
         question = questionRepository.save(question);
 
-        List<Answer> savedAnswers = saveAnswersForQuestion(question.getQuestionId(), request.getAnswers(), request.getQuestionType());
+        List<Answer> savedAnswers = saveAnswersForQuestion(
+                question.getQuestionId(),
+                request.getAnswers(),
+                request.getQuestionType()
+        );
 
         TestQuestion tq = new TestQuestion();
         tq.setTestPartId(request.getTestPartId());
         tq.setQuestionId(question.getQuestionId());
         testQuestionRepository.save(tq);
 
-        return buildQuestionAdminResponse(question, savedPassage, savedAnswers, request.getTestPartId());
+        return buildQuestionAdminResponse(
+                question,
+                savedPassage,
+                savedAnswers,
+                request.getTestPartId()
+        );
     }
 
     private boolean hasPassageContent(PassageRequest pr) {
