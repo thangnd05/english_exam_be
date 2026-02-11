@@ -346,29 +346,51 @@ public class QuestionService {
         return (pr.getContent() != null && !pr.getContent().trim().isEmpty()) || pr.getMediaUrl() != null;
     }
 
-    private List<Answer> saveAnswersForQuestion(Long questionId, List<AnswerRequest> answers, Question.QuestionType questionType) {
+    private List<Answer> saveAnswersForQuestion(
+            Long questionId,
+            List<AnswerRequest> answers,
+            Question.QuestionType questionType
+    ) {
+
         if (answers == null || answers.isEmpty()) return List.of();
+
         List<Answer> list = new ArrayList<>();
+
         if (questionType == Question.QuestionType.FILL_BLANK) {
+
             AnswerRequest ar = answers.get(0);
+
             Answer a = new Answer();
             a.setQuestionId(questionId);
-            a.setAnswerText(ar.getAnswerText());
-            a.setAnswerLabel(ar.getLabel() != null ? ar.getLabel() : "");
-            a.setIsCorrect(Boolean.TRUE);
+            a.setAnswerText(ar.getAnswerText() != null ? ar.getAnswerText() : "");
+            a.setAnswerLabel(ar.getAnswerLabel() != null ? ar.getAnswerLabel() : "");
+            a.setIsCorrect(true);
+
             list.add(a);
+
         } else {
+
             for (AnswerRequest ar : answers) {
+
                 Answer a = new Answer();
                 a.setQuestionId(questionId);
-                a.setAnswerText(ar.getAnswerText());
-                a.setAnswerLabel(ar.getLabel() != null ? ar.getLabel() : "");
-                a.setIsCorrect(ar.getIsCorrect() != null && ar.getIsCorrect());
+
+                // 🔥 FIX 1: đảm bảo không null
+                a.setAnswerText(ar.getAnswerText() != null ? ar.getAnswerText() : "");
+
+                // 🔥 FIX 2: đảm bảo không null
+                a.setAnswerLabel(ar.getAnswerLabel() != null ? ar.getAnswerLabel() : "");
+
+                // 🔥 FIX 3: đảm bảo boolean không null
+                a.setIsCorrect(Boolean.TRUE.equals(ar.getIsCorrect()));
+
                 list.add(a);
             }
         }
+
         return answerRepository.saveAll(list);
     }
+
 
     private QuestionAdminResponse buildQuestionAdminResponse(Question question, Passage passage,
                                                              List<Answer> answerEntities, Long testPartId) {
@@ -447,6 +469,100 @@ public class QuestionService {
         );
 
     }
+
+
+
+    @Transactional
+    public List<QuestionAdminResponse> createBulkGroups(
+            BulkPassageGroupRequest request,
+            HttpServletRequest httpRequest
+    ) {
+
+        Long currentUserId = authUtils.getUserId(httpRequest);
+
+        if (currentUserId == null) {
+            throw new RuntimeException("Không xác định được người dùng.");
+        }
+
+        if (request.getGroups() == null || request.getGroups().isEmpty()) {
+            throw new RuntimeException("Danh sách groups không được rỗng.");
+        }
+
+        List<QuestionAdminResponse> allResponses = new ArrayList<>();
+
+        for (PassageQuestionGroup group : request.getGroups()) {
+
+            // ===== VALIDATE PASSAGE =====
+            if (group.getPassage() == null) {
+                throw new RuntimeException("Passage không được null.");
+            }
+
+            PassageRequest pReq = group.getPassage();
+
+            if (pReq.getPassageType() == Passage.PassageType.READING) {
+                if (pReq.getContent() == null || pReq.getContent().trim().isEmpty()) {
+                    throw new RuntimeException("Reading passage bắt buộc có nội dung.");
+                }
+            }
+
+            if (group.getQuestions() == null || group.getQuestions().isEmpty()) {
+                throw new RuntimeException("Passage phải có ít nhất 1 câu hỏi.");
+            }
+
+            // ===== SAVE PASSAGE =====
+            Passage passage = new Passage();
+            passage.setContent(
+                    pReq.getContent() != null ? pReq.getContent() : ""
+            );
+            passage.setPassageType(pReq.getPassageType());
+            passage.setMediaUrl(pReq.getMediaUrl());
+
+            passage = passageRepository.save(passage);
+
+            // ===== SAVE QUESTIONS =====
+            for (NormalQuestionRequest qReq : group.getQuestions()) {
+
+                Question question = new Question();
+                question.setExamPartId(request.getExamPartId());
+                question.setPassageId(passage.getPassageId());
+                question.setQuestionText(qReq.getQuestionText());
+                question.setQuestionType(qReq.getQuestionType());
+                question.setCreatedBy(currentUserId);
+                question.setIsBank(true); // 👈 FIX
+
+
+                if (request.getClassId() != null) {
+                    question.setClassId(request.getClassId());
+                }
+
+                if (request.getChapterId() != null) {
+                    question.setChapterId(request.getChapterId());
+                }
+
+                question = questionRepository.save(question);
+
+                // ===== SAVE ANSWERS =====
+                List<Answer> savedAnswers =
+                        saveAnswersForQuestion(
+                                question.getQuestionId(),
+                                qReq.getAnswers(),
+                                qReq.getQuestionType()
+                        );
+
+                allResponses.add(
+                        buildQuestionAdminResponse(
+                                question,
+                                passage,
+                                savedAnswers,
+                                null
+                        )
+                );
+            }
+        }
+
+        return allResponses;
+    }
+
 
 
 

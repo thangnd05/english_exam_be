@@ -10,5 +10,5 @@ import lombok.*;
 public class AnswerRequest {
     private String answerText;
     private Boolean isCorrect;
-    private String label; // ví dụ: A, B, C, D
+    private String answerLabel; // ví dụ: A, B, C, D
 }

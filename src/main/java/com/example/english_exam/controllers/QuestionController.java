@@ -1,9 +1,6 @@
 package com.example.english_exam.controllers;
 
-import com.example.english_exam.dto.request.BulkCreateQuestionsToBankRequest;
-import com.example.english_exam.dto.request.BulkQuestionWithPassageRequest;
-import com.example.english_exam.dto.request.CreateQuestionAndAttachRequest;
-import com.example.english_exam.dto.request.QuestionCreateRequest;
+import com.example.english_exam.dto.request.*;
 import com.example.english_exam.dto.response.admin.QuestionAdminResponse;
 import com.example.english_exam.dto.response.user.QuestionResponse;
 import com.example.english_exam.models.Question;
@@ -168,5 +165,25 @@ public class QuestionController {
     public ResponseEntity<Void> deleteQuestion(@PathVariable Long id) {
         questionService.deleteById(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping(
+            value = "/bulk-groups",
+            consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE
+    )
+    public ResponseEntity<List<QuestionAdminResponse>> createBulkGroups(
+            @RequestBody BulkPassageGroupRequest request,
+            HttpServletRequest httpRequest
+    ) {
+        try {
+            List<QuestionAdminResponse> responses =
+                    questionService.createBulkGroups(request, httpRequest);
+
+            return ResponseEntity.status(HttpStatus.CREATED).body(responses);
+
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(null);
+        }
     }
 }

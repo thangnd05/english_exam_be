@@ -92,7 +92,7 @@ public class QuestionService {
                         ans.setQuestionId(question.getQuestionId());
                         ans.setAnswerText(ar.getAnswerText());
                         ans.setIsCorrect(ar.getIsCorrect());
-                        ans.setAnswerLabel(ar.getLabel());
+                        ans.setAnswerLabel(ar.getAnswerLabel());
                         answerEntities.add(answerRepository.save(ans));
                     }
                     break;
@@ -103,7 +103,7 @@ public class QuestionService {
                     ans.setQuestionId(question.getQuestionId());
                     ans.setAnswerText(ar.getAnswerText());
                     ans.setIsCorrect(true);
-                    ans.setAnswerLabel(ar.getLabel());
+                    ans.setAnswerLabel(ar.getAnswerLabel());
                     answerEntities.add(answerRepository.save(ans));
                     break;
 
