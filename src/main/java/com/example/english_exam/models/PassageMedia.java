@@ -23,7 +23,8 @@ public class PassageMedia {
 
     public enum MediaType {
         IMAGE,
-        AUDIO
+        AUDIO,
+        DOCUMENT,
     }
 }
 

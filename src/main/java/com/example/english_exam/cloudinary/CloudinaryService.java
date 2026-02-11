@@ -36,6 +36,22 @@ public class CloudinaryService {
         return (String) uploadResult.get("secure_url");
     }
 
+    public String uploadDocument(MultipartFile file) throws IOException {
+
+        Map uploadResult = cloudinary.uploader().upload(
+                file.getBytes(),
+                ObjectUtils.asMap(
+                        "resource_type", "raw", // 🔥 quan trọng
+                        "folder", "english_exam/documents",
+                        "use_filename", true,
+                        "unique_filename", true
+                )
+        );
+
+        return (String) uploadResult.get("secure_url");
+    }
+
+
     public Map updateImage(String publicId, MultipartFile file) throws IOException {
         return cloudinary.uploader().upload(file.getBytes(),
                 ObjectUtils.asMap("public_id", publicId, "resource_type", "auto"));

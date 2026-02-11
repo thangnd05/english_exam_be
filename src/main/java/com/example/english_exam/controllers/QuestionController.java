@@ -13,6 +13,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.multipart.MultipartHttpServletRequest;
 
 import java.io.IOException;
 import java.util.List;
@@ -128,36 +129,24 @@ public class QuestionController {
         }
     }
 
-    @PostMapping(
-            value = "/create-and-attach",
-            consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
-            produces = MediaType.APPLICATION_JSON_VALUE
-    )
+    @PostMapping(value = "/create-and-attach", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<QuestionAdminResponse> createQuestionAndAttachToTest(
-            @RequestParam("request") String requestJson,
-            @RequestParam(value = "audio", required = false) MultipartFile audioFile,
+            @RequestPart("request") String requestJson,
             HttpServletRequest httpRequest
-    ) {
+    ) throws IOException {
 
-        try {
+        // Lấy toàn bộ file từ request
+        MultipartHttpServletRequest multipartRequest = (MultipartHttpServletRequest) httpRequest;
+        Map<String, MultipartFile> files = multipartRequest.getFileMap();
 
-            CreateQuestionAndAttachRequest request =
-                    objectMapper.readValue(requestJson, CreateQuestionAndAttachRequest.class);
+        CreateQuestionAndAttachRequest request =
+                objectMapper.readValue(requestJson, CreateQuestionAndAttachRequest.class);
 
-            QuestionAdminResponse response =
-                    questionService.createQuestionAndAttachToTest(
-                            request,
-                            httpRequest,
-                            audioFile
-                    );
+        QuestionAdminResponse result =
+                questionService.createQuestionAndAttachToTest(request, httpRequest, files);
 
-            return ResponseEntity.status(HttpStatus.CREATED).body(response);
-
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().build();
-        }
+        return ResponseEntity.ok(result);
     }
-
 
     // =================== DELETE ===================
 
@@ -167,19 +156,27 @@ public class QuestionController {
         return ResponseEntity.noContent().build();
     }
 
+
     @PostMapping(
             value = "/bulk-groups",
             consumes = MediaType.MULTIPART_FORM_DATA_VALUE
     )
     public ResponseEntity<List<QuestionAdminResponse>> createBulkGroups(
             @RequestPart("request") String requestJson,
-            @RequestPart(required = false) Map<String, MultipartFile> files,
             HttpServletRequest httpRequest
     ) throws IOException {
 
+        // 1. Ép kiểu request sang MultipartRequest
+        MultipartHttpServletRequest multipartRequest = (MultipartHttpServletRequest) httpRequest;
+
+        // 2. Lấy toàn bộ Map chứa các file (key là tên media_x_x, value là file)
+        Map<String, MultipartFile> files = multipartRequest.getFileMap();
+
+        // 3. Parse JSON thủ công
         BulkPassageGroupRequest request =
                 objectMapper.readValue(requestJson, BulkPassageGroupRequest.class);
 
+        // 4. Gọi service
         List<QuestionAdminResponse> result =
                 questionService.createBulkGroups(request, httpRequest, files);
 
