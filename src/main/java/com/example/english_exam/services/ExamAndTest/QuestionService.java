@@ -475,8 +475,9 @@ public class QuestionService {
     @Transactional
     public List<QuestionAdminResponse> createBulkGroups(
             BulkPassageGroupRequest request,
-            HttpServletRequest httpRequest
-    ) {
+            HttpServletRequest httpRequest,
+            Map<String, MultipartFile> files
+    ) throws IOException {
 
         Long currentUserId = authUtils.getUserId(httpRequest);
 
@@ -484,42 +485,36 @@ public class QuestionService {
             throw new RuntimeException("Không xác định được người dùng.");
         }
 
-        if (request.getGroups() == null || request.getGroups().isEmpty()) {
-            throw new RuntimeException("Danh sách groups không được rỗng.");
-        }
-
         List<QuestionAdminResponse> allResponses = new ArrayList<>();
 
-        for (PassageQuestionGroup group : request.getGroups()) {
+        for (int gIndex = 0; gIndex < request.getGroups().size(); gIndex++) {
 
-            // ===== VALIDATE PASSAGE =====
-            if (group.getPassage() == null) {
-                throw new RuntimeException("Passage không được null.");
-            }
-
+            PassageQuestionGroup group = request.getGroups().get(gIndex);
             PassageRequest pReq = group.getPassage();
 
-            if (pReq.getPassageType() == Passage.PassageType.READING) {
-                if (pReq.getContent() == null || pReq.getContent().trim().isEmpty()) {
-                    throw new RuntimeException("Reading passage bắt buộc có nội dung.");
-                }
-            }
-
-            if (group.getQuestions() == null || group.getQuestions().isEmpty()) {
-                throw new RuntimeException("Passage phải có ít nhất 1 câu hỏi.");
-            }
-
-            // ===== SAVE PASSAGE =====
             Passage passage = new Passage();
-            passage.setContent(
-                    pReq.getContent() != null ? pReq.getContent() : ""
-            );
+            passage.setContent(pReq.getContent() != null ? pReq.getContent() : "");
             passage.setPassageType(pReq.getPassageType());
-            passage.setMediaUrl(pReq.getMediaUrl());
+
+            // 🔥 XỬ LÝ FILE THEO KEY
+            MultipartFile mediaFile = files != null
+                    ? files.get("media_" + gIndex)
+                    : null;
+
+            if (mediaFile != null && !mediaFile.isEmpty()) {
+
+                if (pReq.getPassageType() == Passage.PassageType.LISTENING) {
+                    passage.setMediaUrl(cloudinaryService.uploadAudio(mediaFile));
+                } else {
+                    passage.setMediaUrl(cloudinaryService.uploadImage(mediaFile));
+                }
+
+            } else {
+                passage.setMediaUrl(pReq.getMediaUrl());
+            }
 
             passage = passageRepository.save(passage);
 
-            // ===== SAVE QUESTIONS =====
             for (NormalQuestionRequest qReq : group.getQuestions()) {
 
                 Question question = new Question();
@@ -528,20 +523,16 @@ public class QuestionService {
                 question.setQuestionText(qReq.getQuestionText());
                 question.setQuestionType(qReq.getQuestionType());
                 question.setCreatedBy(currentUserId);
-                question.setIsBank(true); // 👈 FIX
+                question.setIsBank(true);
 
-
-                if (request.getClassId() != null) {
+                if (request.getClassId() != null)
                     question.setClassId(request.getClassId());
-                }
 
-                if (request.getChapterId() != null) {
+                if (request.getChapterId() != null)
                     question.setChapterId(request.getChapterId());
-                }
 
                 question = questionRepository.save(question);
 
-                // ===== SAVE ANSWERS =====
                 List<Answer> savedAnswers =
                         saveAnswersForQuestion(
                                 question.getQuestionId(),
@@ -562,6 +553,7 @@ public class QuestionService {
 
         return allResponses;
     }
+
 
 
 

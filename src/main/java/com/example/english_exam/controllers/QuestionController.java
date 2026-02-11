@@ -169,21 +169,21 @@ public class QuestionController {
 
     @PostMapping(
             value = "/bulk-groups",
-            consumes = MediaType.APPLICATION_JSON_VALUE,
-            produces = MediaType.APPLICATION_JSON_VALUE
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE
     )
     public ResponseEntity<List<QuestionAdminResponse>> createBulkGroups(
-            @RequestBody BulkPassageGroupRequest request,
+            @RequestPart("request") String requestJson,
+            @RequestPart(required = false) Map<String, MultipartFile> files,
             HttpServletRequest httpRequest
-    ) {
-        try {
-            List<QuestionAdminResponse> responses =
-                    questionService.createBulkGroups(request, httpRequest);
+    ) throws IOException {
 
-            return ResponseEntity.status(HttpStatus.CREATED).body(responses);
+        BulkPassageGroupRequest request =
+                objectMapper.readValue(requestJson, BulkPassageGroupRequest.class);
 
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(null);
-        }
+        List<QuestionAdminResponse> result =
+                questionService.createBulkGroups(request, httpRequest, files);
+
+        return ResponseEntity.ok(result);
     }
+
 }
