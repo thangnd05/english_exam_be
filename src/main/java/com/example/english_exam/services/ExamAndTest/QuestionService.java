@@ -189,7 +189,7 @@ public class QuestionService {
     public List<QuestionAdminResponse> createBulkQuestionsToBankNoPassage(
             BulkCreateQuestionsToBankRequest request,
             HttpServletRequest httpRequest,
-            Map<String, MultipartFile> audioFiles
+            Map<String, MultipartFile> files
     ) throws IOException {
 
         Long currentUserId = authUtils.getUserId(httpRequest);
@@ -205,6 +205,7 @@ public class QuestionService {
 
         for (int i = 0; i < request.getQuestions().size(); i++) {
 
+            final int questionIndex = i;
             NormalQuestionRequest qReq = request.getQuestions().get(i);
 
             Question question = new Question();
@@ -213,6 +214,7 @@ public class QuestionService {
             question.setQuestionText(qReq.getQuestionText());
             question.setQuestionType(qReq.getQuestionType());
             question.setCreatedBy(currentUserId);
+            question.setIsBank(Boolean.TRUE);
 
             if (request.getClassId() != null)
                 question.setClassId(request.getClassId());
@@ -220,24 +222,63 @@ public class QuestionService {
             if (request.getChapterId() != null)
                 question.setChapterId(request.getChapterId());
 
-            question.setIsBank(Boolean.TRUE);
-
             question = questionRepository.save(question);
 
-            // 🔥 xử lý audio từng câu
-            MultipartFile audioFile = audioFiles.get("audio_" + i);
+            // 🔥 Lấy toàn bộ file của câu hỏi này
+            List<MultipartFile> questionFiles = files.entrySet().stream()
+                    .filter(e -> e.getKey().startsWith("media_" + questionIndex + "_"))
+                    .map(Map.Entry::getValue)
+                    .toList();
 
-            if (audioFile != null && !audioFile.isEmpty()) {
+            if (!questionFiles.isEmpty()) {
 
+                // 1. Tạo đối tượng Passage mới
                 Passage passage = new Passage();
                 passage.setContent("");
-                passage.setPassageType(Passage.PassageType.LISTENING);
-                passage.setMediaUrl(cloudinaryService.uploadAudio(audioFile));
+
+                // --- ĐOẠN SỬA ĐỂ NHẬN DIỆN LOẠI ---
+                // Mặc định là READING (cho ảnh), nếu thấy file audio thì chuyển thành LISTENING
+                Passage.PassageType determinedType = Passage.PassageType.READING;
+
+                for (MultipartFile file : questionFiles) {
+                    if (file != null && file.getContentType() != null) {
+                        if (file.getContentType().startsWith("audio")) {
+                            determinedType = Passage.PassageType.LISTENING;
+                            break; // Ưu tiên LISTENING nếu có file âm thanh
+                        }
+                    }
+                }
+
+                passage.setPassageType(determinedType);
+                // ---------------------------------
 
                 passage = passageRepository.save(passage);
 
                 question.setPassageId(passage.getPassageId());
                 questionRepository.save(question);
+
+                for (MultipartFile file : questionFiles) {
+                    if (file == null || file.isEmpty()) continue;
+
+                    String uploadedUrl;
+                    PassageMedia.MediaType mediaType;
+
+                    // Tối ưu: Dựa vào ContentType của file để gọi Cloudinary tương ứng
+                    if (file.getContentType() != null && file.getContentType().startsWith("audio")) {
+                        uploadedUrl = cloudinaryService.uploadAudio(file);
+                        mediaType = PassageMedia.MediaType.AUDIO;
+                    } else {
+                        uploadedUrl = cloudinaryService.uploadImage(file);
+                        mediaType = PassageMedia.MediaType.IMAGE;
+                    }
+
+                    PassageMedia media = new PassageMedia();
+                    media.setPassageId(passage.getPassageId());
+                    media.setMediaUrl(uploadedUrl);
+                    media.setMediaType(mediaType);
+
+                    passageMediaRepository.save(media);
+                }
             }
 
             List<Answer> savedAnswers = saveAnswersForQuestion(
@@ -246,11 +287,14 @@ public class QuestionService {
                     qReq.getQuestionType()
             );
 
-            responses.add(buildQuestionAdminResponse(question, null, savedAnswers, null));
+            responses.add(
+                    buildQuestionAdminResponse(question, null, savedAnswers, null)
+            );
         }
 
         return responses;
     }
+
 
 
     /**

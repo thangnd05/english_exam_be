@@ -87,29 +87,43 @@ public class QuestionController {
             produces = MediaType.APPLICATION_JSON_VALUE
     )
     public ResponseEntity<List<QuestionAdminResponse>> createBulkQuestionsToBankNoPassage(
-            @RequestParam("request") String requestJson,
-            @RequestParam Map<String, MultipartFile> audioFiles,
+            @RequestPart("request") String requestJson,
             HttpServletRequest httpRequest
     ) {
 
         try {
 
+            // 1️⃣ Parse JSON
             BulkCreateQuestionsToBankRequest request =
-                    objectMapper.readValue(requestJson, BulkCreateQuestionsToBankRequest.class);
+                    objectMapper.readValue(
+                            requestJson,
+                            BulkCreateQuestionsToBankRequest.class
+                    );
 
+            // 2️⃣ Lấy toàn bộ file
+            MultipartHttpServletRequest multipartRequest =
+                    (MultipartHttpServletRequest) httpRequest;
+
+            Map<String, MultipartFile> files =
+                    multipartRequest.getFileMap();
+
+            // 3️⃣ Gọi service
             List<QuestionAdminResponse> responses =
                     questionService.createBulkQuestionsToBankNoPassage(
                             request,
                             httpRequest,
-                            audioFiles
+                            files
                     );
 
-            return ResponseEntity.status(HttpStatus.CREATED).body(responses);
+            return ResponseEntity
+                    .status(HttpStatus.CREATED)
+                    .body(responses);
 
         } catch (Exception e) {
             return ResponseEntity.badRequest().build();
         }
     }
+
 
 
     @PostMapping(value = "/bulk-with-passage", consumes = MediaType.MULTIPART_FORM_DATA_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
