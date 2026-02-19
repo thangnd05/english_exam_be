@@ -43,7 +43,6 @@ public class Question {
     @Column(name ="chapter_id")
     private Long chapterId;
 
-    /** true = câu trong kho; false = câu tạo gắn thẳng đề (giáo viên đặt câu trên lớp). */
     @Column(name = "is_bank")
     private Boolean isBank;
 

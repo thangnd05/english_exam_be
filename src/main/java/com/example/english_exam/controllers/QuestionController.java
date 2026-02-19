@@ -44,22 +44,27 @@ public class QuestionController {
     }
 
 
+    /** Cá nhân: không gửi classId/chapterId (lấy theo user JWT). Lớp: gửi classId (+ chapterId). */
     @GetMapping("/by-part/{examPartId}")
     public ResponseEntity<List<QuestionResponse>> getQuestionsByPart(
             @PathVariable Long examPartId,
-            @RequestParam(required = false) Long classId
+            @RequestParam(required = false) Long classId,
+            @RequestParam(required = false) Long chapterId,
+            HttpServletRequest request
     ) {
-        List<QuestionResponse> questions = questionService.getQuestionsByPart(examPartId, classId);
+        List<QuestionResponse> questions = questionService.getQuestionsByPart(examPartId, classId, chapterId, request);
         return ResponseEntity.ok(questions);
     }
 
-
+    /** Cá nhân: không gửi classId/chapterId. Lớp: gửi classId (+ chapterId). */
     @GetMapping("/count/by-part/{examPartId}")
     public ResponseEntity<Long> countQuestionsByPart(
             @PathVariable Long examPartId,
-            @RequestParam(required = false) Long classId
+            @RequestParam(required = false) Long classId,
+            @RequestParam(required = false) Long chapterId,
+            HttpServletRequest request
     ) {
-        long count = questionService.countByExamPartId(examPartId, classId);
+        long count = questionService.countByExamPartId(examPartId, classId, chapterId, request);
         return ResponseEntity.ok(count);
     }
 

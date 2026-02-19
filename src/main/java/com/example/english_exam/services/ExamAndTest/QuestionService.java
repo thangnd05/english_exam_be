@@ -51,14 +51,23 @@ public class QuestionService {
         return questionRepository.save(question);
     }
 
-    public List<QuestionResponse> getQuestionsByPart(Long examPartId, Long classId) {
+    /**
+     * Lấy danh sách câu theo part.
+     * Cá nhân (classId == null): chỉ câu của user đăng nhập (created_by = currentUserId, class_id/chapter_id NULL).
+     * Lớp: classId (+ chapterId nếu có).
+     */
+    public List<QuestionResponse> getQuestionsByPart(Long examPartId, Long classId, Long chapterId, HttpServletRequest request) {
+        Long currentUserId = authUtils.getUserId(request);
         List<Question> questions;
 
-        // 🟢 Nếu có classId thì chỉ lấy câu hỏi trong lớp đó
         if (classId != null) {
-            questions = questionRepository.findByExamPartIdAndClassId(examPartId, classId);
+            if (chapterId != null) {
+                questions = questionRepository.findByExamPartIdAndClassIdAndChapterId(examPartId, classId, chapterId);
+            } else {
+                questions = questionRepository.findByExamPartIdAndClassId(examPartId, classId);
+            }
         } else {
-            questions = questionRepository.findByExamPartId(examPartId);
+            questions = questionRepository.findByExamPartIdAndCreatedByAndClassIdIsNullAndChapterIdIsNull(examPartId, currentUserId);
         }
 
         List<QuestionResponse> responses = new ArrayList<>();
@@ -88,14 +97,18 @@ public class QuestionService {
         questionRepository.deleteById(id);
     }
 
-    public long countByExamPartId(Long examPartId, Long classId) {
+    /**
+     * Đếm câu theo part. Cá nhân = theo user đăng nhập; lớp = classId (+ chapterId nếu có).
+     */
+    public long countByExamPartId(Long examPartId, Long classId, Long chapterId, HttpServletRequest request) {
+        Long currentUserId = authUtils.getUserId(request);
         if (classId != null) {
-            // 🟢 Đếm theo lớp nếu có
+            if (chapterId != null) {
+                return questionRepository.countByExamPartIdAndClassIdAndChapterId(examPartId, classId, chapterId);
+            }
             return questionRepository.countByExamPartIdAndClassId(examPartId, classId);
-        } else {
-            // 🟢 Không có lớp → đếm toàn bộ
-            return questionRepository.countByExamPartId(examPartId);
         }
+        return questionRepository.countByExamPartIdAndCreatedByAndClassIdIsNullAndChapterIdIsNull(examPartId, currentUserId);
     }
 
     /**

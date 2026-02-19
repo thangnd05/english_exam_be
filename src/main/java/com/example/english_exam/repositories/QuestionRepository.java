@@ -45,6 +45,13 @@ public interface QuestionRepository extends JpaRepository<Question, Long> {
     @Query("SELECT q FROM Question q WHERE q.examPartId = :examPartId AND q.classId = :classId")
     List<Question> findByExamPartIdAndClassId(@Param("examPartId") Long examPartId, @Param("classId") Long classId);
 
+    @Query("SELECT q FROM Question q WHERE q.examPartId = :examPartId AND q.classId = :classId AND q.chapterId = :chapterId")
+    List<Question> findByExamPartIdAndClassIdAndChapterId(
+            @Param("examPartId") Long examPartId,
+            @Param("classId") Long classId,
+            @Param("chapterId") Long chapterId);
+
+    long countByExamPartIdAndClassIdAndChapterId(Long examPartId, Long classId, Long chapterId);
 
     @Query("SELECT COUNT(q) FROM Question q WHERE q.examPartId = :examPartId AND q.classId = :classId")
     long countByExamPartIdAndClassId(@Param("examPartId") Long examPartId,
@@ -64,4 +71,22 @@ public interface QuestionRepository extends JpaRepository<Question, Long> {
             Long chapterId,
             Pageable pageable
     );
+
+    // ========== Cá nhân theo user đăng nhập (created_by = userId, class_id/chapter_id NULL) ==========
+    List<Question> findByExamPartIdAndCreatedByAndClassIdIsNullAndChapterIdIsNull(
+            Long examPartId, Long createdBy);
+
+    long countByExamPartIdAndCreatedByAndClassIdIsNullAndChapterIdIsNull(
+            Long examPartId, Long createdBy);
+
+    @Query(value = """
+        SELECT * FROM questions
+        WHERE exam_part_id = :examPartId AND created_by = :createdBy
+          AND class_id IS NULL AND chapter_id IS NULL
+        ORDER BY RAND() LIMIT :limit
+        """, nativeQuery = true)
+    List<Question> findRandomByExamPartAndCreatedByAndClassIdIsNullAndChapterIdIsNull(
+            @Param("examPartId") Long examPartId,
+            @Param("createdBy") Long createdBy,
+            @Param("limit") int limit);
 }

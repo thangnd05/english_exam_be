@@ -120,17 +120,19 @@ public class TestController {
         }
     }
 
-//    /** Lấy câu hỏi random từ kho và gắn vào part. Body: testPartId, count, (optional) classId, chapterId. */
-//    @PostMapping("/parts/random-questions")
-//    public ResponseEntity<AddRandomQuestionsResponse> addRandomQuestionsToTestPart(
-//            @RequestBody AddRandomQuestionsToTestRequest request) {
-//        try {
-//            AddRandomQuestionsResponse response = testService.addRandomQuestionsToTestPart(request);
-//            return ResponseEntity.ok(response);
-//        } catch (RuntimeException e) {
-//            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
-//        }
-//    }
+    /** Lấy câu hỏi random từ kho và gắn vào part. Cá nhân: không gửi classId/chapterId (theo user JWT). Lớp: gửi classId (+ chapterId). */
+    @PostMapping("/parts/random-questions")
+    public ResponseEntity<AddRandomQuestionsResponse> addRandomQuestionsToTestPart(
+            @RequestBody AddRandomQuestionsToTestRequest request,
+            HttpServletRequest httpRequest) {
+        try {
+            Long currentUserId = authUtils.getUserId(httpRequest);
+            AddRandomQuestionsResponse response = testService.addRandomQuestionsToTestPart(request, currentUserId);
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
+        }
+    }
 
     // Cập nhật test
     @PutMapping("/{id}")

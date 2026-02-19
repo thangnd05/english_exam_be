@@ -2,6 +2,8 @@ package com.example.english_exam.services.ExamAndTest;
 
 import com.example.english_exam.cloudinary.CloudinaryService;
 import com.example.english_exam.dto.request.AddQuestionsToTestRequest;
+import com.example.english_exam.dto.request.AddRandomQuestionsToTestRequest;
+import com.example.english_exam.dto.response.AddRandomQuestionsResponse;
 import com.example.english_exam.dto.response.*;
 import com.example.english_exam.dto.response.admin.AnswerAdminResponse;
 import com.example.english_exam.dto.response.admin.QuestionAdminResponse;
@@ -17,6 +19,7 @@ import com.example.english_exam.util.AuthUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.transaction.Transactional;
 import lombok.AllArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -608,7 +611,60 @@ public class TestService {
         }
     }
 
+    /**
+     * Lấy câu hỏi random từ kho và gắn vào part.
+     * Cá nhân (không classId/chapterId): chỉ kho của user đăng nhập (created_by = currentUserId).
+     * Lớp: classId (+ chapterId nếu có).
+     */
+    @Transactional
+    public AddRandomQuestionsResponse addRandomQuestionsToTestPart(AddRandomQuestionsToTestRequest request, Long currentUserId) {
+        if (request.getTestPartId() == null || request.getCount() == null || request.getCount() <= 0) {
+            throw new RuntimeException("testPartId và count (số câu) phải hợp lệ.");
+        }
+        if (request.getChapterId() != null && request.getClassId() == null) {
+            throw new RuntimeException("Khi có chapterId thì phải có classId.");
+        }
+        Long testPartId = request.getTestPartId();
+        int count = request.getCount();
+        TestPart testPart = testPartRepository.findById(testPartId)
+                .orElseThrow(() -> new RuntimeException("TestPart không tồn tại: " + testPartId));
+        Long examPartId = testPart.getExamPartId();
 
+        Set<Long> existingIds = testQuestionRepository.findByTestPartId(testPartId).stream()
+                .map(TestQuestion::getQuestionId)
+                .collect(Collectors.toSet());
+
+        List<Question> pool;
+        if (request.getClassId() != null && request.getChapterId() != null) {
+            pool = questionRepository.findRandomQuestionsByExamPartIdAndClassIdAndChapterId(
+                    examPartId, request.getClassId(), request.getChapterId(), Pageable.ofSize(count));
+        } else if (request.getClassId() != null) {
+            pool = questionRepository.findRandomQuestionsByExamPartIdAndClassId(
+                    examPartId, request.getClassId(), Pageable.ofSize(count));
+        } else {
+            pool = questionRepository.findRandomByExamPartAndCreatedByAndClassIdIsNullAndChapterIdIsNull(
+                    examPartId, currentUserId, count);
+        }
+
+        List<Long> toAdd = pool.stream()
+                .map(Question::getQuestionId)
+                .filter(id -> !existingIds.contains(id))
+                .limit(count)
+                .toList();
+
+        for (Long questionId : toAdd) {
+            Question question = questionRepository.findById(questionId)
+                    .orElseThrow(() -> new RuntimeException("Câu hỏi không tồn tại: " + questionId));
+            if (!question.getExamPartId().equals(examPartId)) {
+                continue;
+            }
+            TestQuestion tq = new TestQuestion();
+            tq.setTestPartId(testPartId);
+            tq.setQuestionId(questionId);
+            testQuestionRepository.save(tq);
+        }
+        return new AddRandomQuestionsResponse(toAdd.size());
+    }
 
 
 
