@@ -78,6 +78,7 @@ public class QuestionService {
             dto.setQuestionText(q.getQuestionText());
             dto.setQuestionType(q.getQuestionType());
             dto.setExplanation(q.getExplanation());
+            dto.setPassageId(q.getPassageId());
 
             List<Answer> answers = answerRepository.findByQuestionId(q.getQuestionId());
             List<AnswerResponse> answerDtos = answers.stream()

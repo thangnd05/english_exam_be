@@ -22,6 +22,8 @@ public class QuestionResponse {
     protected Long testPartId;
     protected List<AnswerResponse> answers;
     protected PassageResponse passage;
+    /** passage_id của câu hỏi (null = câu độc lập). Dùng để FE nhóm câu theo passage khi chọn. */
+    protected Long passageId;
 
     public QuestionResponse(Long questionId, Long examPartId, String questionText, Question.QuestionType questionType, String explanation, Long testPartId, List<AnswerResponse> answers, PassageResponse passage) {
         this.questionId = questionId;

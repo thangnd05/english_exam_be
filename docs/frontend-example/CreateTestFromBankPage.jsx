@@ -109,14 +109,49 @@ const CreateTestFromBankPage = () => {
     }));
   };
 
-  const toggleQuestion = (examPartId, questionId) => {
-    setPartConfigs((prev) => {
-      const cfg = prev[examPartId];
-      const set = new Set(cfg.selectedIds);
-      if (set.has(questionId)) set.delete(questionId);
-      else set.add(questionId);
-      return { ...prev, [examPartId]: { ...cfg, selectedIds: Array.from(set) } };
+  /** Nhóm câu theo passage_id (cùng passage = 1 nhóm; không passage = mỗi câu 1 nhóm). */
+  const groupQuestionsByPassage = (questions) => {
+    if (!questions?.length) return [];
+    const map = new Map();
+    questions.forEach((q) => {
+      const id = q.questionId ?? q.id;
+      const passageId = q.passageId ?? q.passage?.passageId ?? null;
+      const groupKey = passageId != null ? `passage-${passageId}` : `no-passage-${id}`;
+      if (!map.has(groupKey)) {
+        map.set(groupKey, { groupKey, passageId, questions: [] });
+      }
+      map.get(groupKey).questions.push(q);
     });
+    return Array.from(map.values());
+  };
+
+  /** Bật/tắt cả nhóm (cùng passage): chọn hoặc bỏ chọn toàn bộ câu trong nhóm. */
+  const toggleGroup = (examPartId, groupKey) => {
+    const cfg = partConfigs[examPartId];
+    if (!cfg) return;
+    const groups = groupQuestionsByPassage(cfg.bankQuestions);
+    const group = groups.find((g) => g.groupKey === groupKey);
+    if (!group) return;
+    const ids = group.questions.map((q) => q.questionId ?? q.id).filter(Boolean);
+    const selectedSet = new Set(cfg.selectedIds || []);
+    const allSelected = ids.every((id) => selectedSet.has(id));
+    if (allSelected) {
+      ids.forEach((id) => selectedSet.delete(id));
+    } else {
+      ids.forEach((id) => selectedSet.add(id));
+    }
+    updatePartConfig(examPartId, 'selectedIds', Array.from(selectedSet));
+  };
+
+  const isGroupSelected = (examPartId, groupKey) => {
+    const cfg = partConfigs[examPartId];
+    if (!cfg) return false;
+    const groups = groupQuestionsByPassage(cfg.bankQuestions);
+    const group = groups.find((g) => g.groupKey === groupKey);
+    if (!group) return false;
+    const ids = group.questions.map((q) => q.questionId ?? q.id).filter(Boolean);
+    const selectedSet = new Set(cfg.selectedIds || []);
+    return ids.length > 0 && ids.every((id) => selectedSet.has(id));
   };
 
   const toggleSelectAll = (examPartId, checked) => {
@@ -325,7 +360,7 @@ const CreateTestFromBankPage = () => {
                 <IoLibraryOutline /> 2. Cấu hình từng Part
               </div>
               <p className={cx('hint')}>
-                Mỗi part: <strong>Random theo số lượng</strong> (BE lấy ngẫu nhiên từ kho cá nhân) hoặc <strong>Chọn thủ công</strong>. Để part không có trong đề, để số câu = 0 hoặc không chọn câu nào.
+                Mỗi part: <strong>Random theo số lượng</strong> (BE lấy ngẫu nhiên từ kho cá nhân) hoặc <strong>Chọn thủ công</strong>. Với part có passage (vd. Part 3, 4, 6, 7): chọn theo <strong>nhóm (cùng passage)</strong> để giữ tính tương đồng, không chọn lẻ từng câu.
               </p>
 
               {(examParts || []).map((part) => {
@@ -396,40 +431,58 @@ const CreateTestFromBankPage = () => {
                           <Alert variant="info" className="mb-0 mt-2">Chưa có câu hỏi trong kho (cá nhân) cho part này.</Alert>
                         )}
 
-                        {!cfg.loading && cfg.mode === SELECTION_MODES.MANUAL && maxInBank > 0 && (
-                          <>
-                            <div className={cx('selectAllRow')}>
-                              <Form.Check
-                                type="checkbox"
-                                id={`select-all-${part.examPartId}`}
-                                label={`Chọn tất cả (${maxInBank} câu)`}
-                                checked={allSelected}
-                                onChange={(e) => toggleSelectAll(part.examPartId, e.target.checked)}
-                                aria-label={`Chọn tất cả ${part.name}`}
-                              />
-                            </div>
-                            <ul className={cx('questionList')} role="list">
-                              {cfg.bankQuestions.map((q, index) => {
-                                const id = q.questionId ?? q.id;
-                                if (id == null) return null;
-                                const checked = (cfg.selectedIds || []).includes(id);
-                                return (
-                                  <li key={id} className={cx('questionItem', { selected: checked })}>
-                                    <Form.Check
-                                      type="checkbox"
-                                      id={`q-${part.examPartId}-${id}`}
-                                      checked={checked}
-                                      onChange={() => toggleQuestion(part.examPartId, id)}
-                                      aria-label={`Chọn câu ${index + 1}`}
-                                    />
-                                    <span className={cx('questionIndex')}>{index + 1}.</span>
-                                    <span className={cx('questionText')}>{q.questionText || '(Không có nội dung)'}</span>
-                                  </li>
-                                );
-                              })}
-                            </ul>
-                          </>
-                        )}
+                        {!cfg.loading && cfg.mode === SELECTION_MODES.MANUAL && maxInBank > 0 && (() => {
+                          const groups = groupQuestionsByPassage(cfg.bankQuestions);
+                          return (
+                            <>
+                              <div className={cx('selectAllRow')}>
+                                <Form.Check
+                                  type="checkbox"
+                                  id={`select-all-${part.examPartId}`}
+                                  label={`Chọn tất cả (${maxInBank} câu)`}
+                                  checked={allSelected}
+                                  onChange={(e) => toggleSelectAll(part.examPartId, e.target.checked)}
+                                  aria-label={`Chọn tất cả ${part.name}`}
+                                />
+                              </div>
+                              <div className={cx('groupList')}>
+                                {groups.map((gr) => {
+                                  const grSelected = isGroupSelected(part.examPartId, gr.groupKey);
+                                  const grLabel = gr.passageId != null
+                                    ? `Nhóm passage (${gr.questions.length} câu)`
+                                    : `Câu độc lập (${gr.questions.length} câu)`;
+                                  return (
+                                    <div key={gr.groupKey} className={cx('passageGroup', { selected: grSelected })}>
+                                      <div className={cx('groupHeader')}>
+                                        <Form.Check
+                                          type="checkbox"
+                                          id={`gr-${part.examPartId}-${gr.groupKey}`}
+                                          checked={grSelected}
+                                          onChange={() => toggleGroup(part.examPartId, gr.groupKey)}
+                                          aria-label={grLabel}
+                                        />
+                                        <span className={cx('groupLabel')}>{grLabel}</span>
+                                      </div>
+                                      <ul className={cx('questionList')} role="list">
+                                        {gr.questions.map((q, index) => {
+                                          const id = q.questionId ?? q.id;
+                                          if (id == null) return null;
+                                          const checked = (cfg.selectedIds || []).includes(id);
+                                          return (
+                                            <li key={id} className={cx('questionItem', { selected: checked })}>
+                                              <span className={cx('questionIndex')}>{index + 1}.</span>
+                                              <span className={cx('questionText')}>{q.questionText || '(Không có nội dung)'}</span>
+                                            </li>
+                                          );
+                                        })}
+                                      </ul>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </>
+                          );
+                        })()}
                       </div>
                     )}
                   </div>
