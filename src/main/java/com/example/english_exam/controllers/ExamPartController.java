@@ -2,6 +2,7 @@ package com.example.english_exam.controllers;
 
 import com.example.english_exam.models.ExamPart;
 import com.example.english_exam.services.ExamAndTest.ExamPartService;
+import lombok.AllArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -9,12 +10,9 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/exam-parts")
+@AllArgsConstructor
 public class ExamPartController {
     private final ExamPartService examPartService;
-
-    public ExamPartController(ExamPartService examPartService) {
-        this.examPartService = examPartService;
-    }
 
     // Lấy tất cả exam parts
     @GetMapping

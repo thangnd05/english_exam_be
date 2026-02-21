@@ -3,6 +3,7 @@ package com.example.english_exam.controllers;
 import com.example.english_exam.dto.request.PassageMediaRequest;
 import com.example.english_exam.dto.response.PassageMediaResponse;
 import com.example.english_exam.services.PassageMediaService;
+import lombok.AllArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -10,13 +11,10 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/passage-media")
+@AllArgsConstructor
 public class PassageMediaController {
 
     private final PassageMediaService service;
-
-    public PassageMediaController(PassageMediaService service) {
-        this.service = service;
-    }
 
     // CREATE
     @PostMapping

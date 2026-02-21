@@ -3,7 +3,7 @@ package com.example.english_exam.controllers;
 import com.example.english_exam.models.ClassMember;
 import com.example.english_exam.services.ClassMemberService;
 import jakarta.servlet.http.HttpServletRequest;
-import lombok.RequiredArgsConstructor;
+import lombok.AllArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -12,7 +12,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/class-members")
-@RequiredArgsConstructor
+@AllArgsConstructor
 public class ClassMemberController {
 
     private final ClassMemberService classMemberService;

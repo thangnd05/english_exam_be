@@ -5,6 +5,7 @@ import com.example.english_exam.dto.response.ResultSummaryDto;
 import com.example.english_exam.models.UserAnswer;
 import com.example.english_exam.services.ExamAndTest.AnswerService;
 import com.example.english_exam.services.ExamAndTest.UserAnswerService;
+import lombok.AllArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -12,15 +13,11 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/user-answers")
+@AllArgsConstructor
 public class UserAnswerController {
 
     private final UserAnswerService userAnswerService;
     private final AnswerService answerService;
-
-    public UserAnswerController(UserAnswerService userAnswerService, AnswerService answerService) {
-        this.userAnswerService = userAnswerService;
-        this.answerService = answerService;
-    }
 
     @GetMapping
     public ResponseEntity<List<UserAnswer>> getAll() {

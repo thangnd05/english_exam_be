@@ -2,6 +2,7 @@ package com.example.english_exam.controllers;
 
 import com.example.english_exam.models.Role;
 import com.example.english_exam.services.RoleService;
+import lombok.AllArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -9,12 +10,10 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/roles")
+@AllArgsConstructor
 public class RoleController {
     private final RoleService roleService;
 
-    public RoleController(RoleService roleService) {
-        this.roleService = roleService;
-    }
 
     // Lấy tất cả roles
     @GetMapping

@@ -5,6 +5,7 @@ import com.example.english_exam.dto.response.VocabularyResponse;
 import com.example.english_exam.models.Vocabulary;
 import com.example.english_exam.services.LearningVoca.VocabularyService;
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.AllArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -12,12 +13,10 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/vocabularies")
+@AllArgsConstructor
 public class VocabularyController {
     private final VocabularyService service;
 
-    public VocabularyController(VocabularyService service) {
-        this.service = service;
-    }
 
     @GetMapping
     public ResponseEntity<List<Vocabulary>> getAll() {

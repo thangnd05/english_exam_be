@@ -2,6 +2,7 @@ package com.example.english_exam.controllers;
 
 import com.example.english_exam.models.TestQuestion;
 import com.example.english_exam.services.ExamAndTest.TestQuestionService;
+import lombok.AllArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -9,13 +10,11 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/test-questions")
+@AllArgsConstructor
 public class TestQuestionController {
 
     private final TestQuestionService testQuestionService;
 
-    public TestQuestionController(TestQuestionService testQuestionService) {
-        this.testQuestionService = testQuestionService;
-    }
 
     // Lấy tất cả test questions
     @GetMapping

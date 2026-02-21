@@ -2,6 +2,7 @@ package com.example.english_exam.controllers;
 
 import com.example.english_exam.models.Answer;
 import com.example.english_exam.services.ExamAndTest.AnswerService;
+import lombok.AllArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -9,12 +10,10 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/answers")
+@AllArgsConstructor
 public class AnswerController {
     private final AnswerService answerService;
 
-    public AnswerController(AnswerService answerService) {
-        this.answerService = answerService;
-    }
     @GetMapping
     public ResponseEntity<List<Answer>> getAllAnswer() {
         return ResponseEntity.ok(answerService.findAll());

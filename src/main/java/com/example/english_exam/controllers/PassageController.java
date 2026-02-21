@@ -2,6 +2,7 @@ package com.example.english_exam.controllers;
 
 import com.example.english_exam.models.Passage;
 import com.example.english_exam.services.ExamAndTest.PassageService;
+import lombok.AllArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -9,13 +10,11 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/passages")
+@AllArgsConstructor
 public class PassageController {
 
     private final PassageService passageService;
 
-    public PassageController(PassageService passageService) {
-        this.passageService = passageService;
-    }
 
     @GetMapping
     public ResponseEntity<List<Passage>> getAllPassages() {

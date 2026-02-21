@@ -3,12 +3,14 @@ package com.example.english_exam.controllers;
 import com.example.english_exam.dto.request.PracticeCheckRequest;
 import com.example.english_exam.services.LearningVoca.PracticeService;
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.AllArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/practice-questions")
+@AllArgsConstructor
 public class PracticeController {
 
     @Autowired

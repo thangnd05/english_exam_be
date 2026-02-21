@@ -1,11 +1,8 @@
-// src/main/java/com/example/english_exam/services/AuthService.java
 package com.example.english_exam.security;
 
 import com.example.english_exam.dto.auth.UserTokenInfo;
 import com.example.english_exam.dto.request.RegisterRequest;
-import com.example.english_exam.dto.response.AuthResponse;
 import com.example.english_exam.dto.response.UserResponse;
-import com.example.english_exam.models.EmailVerification;
 import com.example.english_exam.models.Role;
 import com.example.english_exam.models.User;
 import com.example.english_exam.repositories.EmailVerificationRepository;
@@ -18,9 +15,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.transaction.Transactional;
 import lombok.AllArgsConstructor;
-import lombok.NoArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;

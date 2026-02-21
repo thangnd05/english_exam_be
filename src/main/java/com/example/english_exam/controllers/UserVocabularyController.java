@@ -2,6 +2,7 @@ package com.example.english_exam.controllers;
 
 import com.example.english_exam.models.UserVocabulary;
 import com.example.english_exam.services.LearningVoca.UserVocabularyService;
+import lombok.AllArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -9,12 +10,9 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/user-vocabulary")
+@AllArgsConstructor
 public class UserVocabularyController {
     private final UserVocabularyService service;
-
-    public UserVocabularyController(UserVocabularyService service) {
-        this.service = service;
-    }
 
     @GetMapping
     public ResponseEntity<List<UserVocabulary>> getAll() {

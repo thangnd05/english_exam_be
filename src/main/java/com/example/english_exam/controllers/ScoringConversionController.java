@@ -1,4 +1,3 @@
-// ScoringConversionController.java
 package com.example.english_exam.controllers;
 
 import com.example.english_exam.models.ScoringConversion;

@@ -1,8 +1,8 @@
-// SkillController.java
 package com.example.english_exam.controllers;
 
 import com.example.english_exam.models.Skill;
 import com.example.english_exam.services.ExamAndTest.SkillService;
+import lombok.AllArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -10,13 +10,10 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/skills")
+@AllArgsConstructor
 public class SkillController {
 
     private final SkillService skillService;
-
-    public SkillController(SkillService skillService) {
-        this.skillService = skillService;
-    }
 
     @GetMapping
     public ResponseEntity<List<Skill>> getAll() {

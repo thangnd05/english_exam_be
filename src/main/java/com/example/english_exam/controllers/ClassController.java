@@ -7,7 +7,7 @@ import com.example.english_exam.models.Test;
 import com.example.english_exam.services.ClassService;
 import com.example.english_exam.services.ExamAndTest.TestService;
 import jakarta.servlet.http.HttpServletRequest;
-import lombok.RequiredArgsConstructor;
+import lombok.AllArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -16,7 +16,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/classes")
-@RequiredArgsConstructor
+@AllArgsConstructor
 public class ClassController {
 
     private final ClassService classService;
