@@ -1,0 +1,42 @@
+// Thêm vào TestStartPage.module.scss nếu chưa có – dùng cho hiển thị nhóm passage (1 passage, nhiều câu).
+
+.passage-group-block {
+  margin-bottom: 1.5rem;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.passage-once {
+  margin-bottom: 1rem;
+}
+
+// Khi 1 passage + 1 câu có ảnh: layout 2 cột (passage trái, câu phải)
+.questions-list.split-layout {
+  display: flex;
+  gap: 1.5rem;
+  align-items: flex-start;
+
+  .passage-column {
+    flex: 0 0 45%;
+    max-width: 45%;
+  }
+
+  .question-column {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .questions-list.split-layout {
+    flex-direction: column;
+
+    .passage-column,
+    .question-column {
+      flex: none;
+      max-width: none;
+    }
+  }
+}

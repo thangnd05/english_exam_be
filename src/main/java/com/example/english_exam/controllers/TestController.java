@@ -72,11 +72,6 @@ public class TestController {
         return ResponseEntity.ok(response);
     }
 
-
-    // Tạo test mới
-
-    // File: TestController.java
-
     @PostMapping
     public ResponseEntity<Test> createTest(@RequestBody CreateTestRequest request, HttpServletRequest httpRequest) {
         try {

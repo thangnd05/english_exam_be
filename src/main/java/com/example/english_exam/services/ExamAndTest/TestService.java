@@ -5,14 +5,8 @@ import com.example.english_exam.dto.request.AddQuestionsToTestRequest;
 import com.example.english_exam.dto.request.AddRandomQuestionsToTestRequest;
 import com.example.english_exam.dto.response.AddRandomQuestionsResponse;
 import com.example.english_exam.dto.response.*;
-import com.example.english_exam.dto.response.admin.AnswerAdminResponse;
-import com.example.english_exam.dto.response.admin.QuestionAdminResponse;
-import com.example.english_exam.dto.response.admin.TestAdminResponse;
-import com.example.english_exam.dto.response.admin.TestPartAdminResponse;
-import com.example.english_exam.dto.response.user.AnswerResponse;
-import com.example.english_exam.dto.response.user.QuestionResponse;
-import com.example.english_exam.dto.response.user.TestPartResponse;
-import com.example.english_exam.dto.response.user.TestResponse;
+import com.example.english_exam.dto.response.admin.*;
+import com.example.english_exam.dto.response.user.*;
 import com.example.english_exam.models.*;
 import com.example.english_exam.repositories.*;
 import com.example.english_exam.util.AuthUtils;
@@ -136,13 +130,10 @@ public class TestService {
                 .orElse(null);
 
         if (latest != null && latest.getStatus() == UserTest.Status.IN_PROGRESS) {
-
             LocalDateTime now = LocalDateTime.now();
-            LocalDateTime endTime = latest.getStartedAt()
-                    .plusMinutes(test.getDurationMinutes());
+            LocalDateTime endTime = latest.getStartedAt().plusMinutes(test.getDurationMinutes());
 
-            if (test.getAvailableTo() != null &&
-                    test.getAvailableTo().isBefore(endTime)) {
+            if (test.getAvailableTo() != null && test.getAvailableTo().isBefore(endTime)) {
                 endTime = test.getAvailableTo();
             }
 
@@ -158,17 +149,11 @@ public class TestService {
         }
 
         // ================= ATTEMPTS =================
-        int attemptsUsed =
-                userTestRepository.countByUserIdAndTestIdAndStatus(
-                        currentUserId,
-                        testId,
-                        UserTest.Status.COMPLETED
-                );
+        int attemptsUsed = userTestRepository.countByUserIdAndTestIdAndStatus(
+                currentUserId, testId, UserTest.Status.COMPLETED);
 
         Integer maxAttempts = test.getMaxAttempts();
-        Integer remaining = (maxAttempts != null)
-                ? Math.max(0, maxAttempts - attemptsUsed)
-                : null;
+        Integer remaining = (maxAttempts != null) ? Math.max(0, maxAttempts - attemptsUsed) : null;
 
         if (maxAttempts != null && remaining <= 0) {
             TestResponse blocked = new TestResponse(test);
@@ -179,153 +164,90 @@ public class TestService {
             return blocked;
         }
 
-        // ================= LOAD PARTS =================
-        List<TestPart> testParts =
-                testPartRepository.findByTestId(testId);
-
+        // ================= LOAD DATA HÀNG LOẠT =================
+        List<TestPart> testParts = testPartRepository.findByTestId(testId);
         if (testParts.isEmpty()) {
-            return new TestResponse(
-                    test.getTestId(),
-                    test.getTitle(),
-                    test.getDescription(),
-                    test.getExamTypeId(),
-                    test.getCreatedBy(),
-                    test.getCreatedAt(),
-                    test.getBannerUrl(),
-                    test.getDurationMinutes(),
-                    test.getAvailableFrom(),
-                    test.getAvailableTo(),
-                    test.calculateStatus().name(),
-                    maxAttempts,
-                    attemptsUsed,
-                    remaining,
-                    true,
-                    Collections.emptyList()
-            );
+            return buildEmptyTestResponse(test, maxAttempts, attemptsUsed, remaining);
         }
 
-        List<Long> partIds =
-                testParts.stream()
-                        .map(TestPart::getTestPartId)
-                        .toList();
+        List<Long> partIds = testParts.stream().map(TestPart::getTestPartId).toList();
+        List<TestQuestion> allTestQuestions = testQuestionRepository.findByTestPartIdIn(partIds);
+        Map<Long, List<TestQuestion>> questionsByPart = allTestQuestions.stream()
+                .collect(Collectors.groupingBy(TestQuestion::getTestPartId));
 
-        List<TestQuestion> allTestQuestions =
-                testQuestionRepository.findByTestPartIdIn(partIds);
+        List<Long> questionIds = allTestQuestions.stream().map(TestQuestion::getQuestionId).distinct().toList();
+        Map<Long, Question> questionMap = questionRepository.findAllById(questionIds).stream()
+                .collect(Collectors.toMap(Question::getQuestionId, q -> q));
 
-        Map<Long, List<TestQuestion>> questionsByPart =
-                allTestQuestions.stream()
-                        .collect(Collectors.groupingBy(TestQuestion::getTestPartId));
+        Set<Long> passageIds = questionMap.values().stream()
+                .map(Question::getPassageId).filter(Objects::nonNull).collect(Collectors.toSet());
 
-        List<Long> questionIds =
-                allTestQuestions.stream()
-                        .map(TestQuestion::getQuestionId)
-                        .distinct()
-                        .toList();
-
-        Map<Long, Question> questionMap =
-                questionRepository.findAllById(questionIds)
-                        .stream()
-                        .collect(Collectors.toMap(Question::getQuestionId, q -> q));
-
-        Set<Long> passageIds =
-                questionMap.values().stream()
-                        .map(Question::getPassageId)
-                        .filter(Objects::nonNull)
-                        .collect(Collectors.toSet());
-
-        Map<Long, Passage> passageMap =
-                passageIds.isEmpty()
-                        ? Collections.emptyMap()
-                        : passageRepository.findAllById(passageIds)
-                        .stream()
+        Map<Long, Passage> passageMap = passageIds.isEmpty() ? Collections.emptyMap() :
+                passageRepository.findAllById(passageIds).stream()
                         .collect(Collectors.toMap(Passage::getPassageId, p -> p));
 
-        Map<Long, List<AnswerResponse>> answersByQuestionId =
-                answerService.getAnswersForMultipleQuestions(questionIds);
+        Map<Long, List<AnswerResponse>> answersByQuestionId = answerService.getAnswersForMultipleQuestions(questionIds);
 
-        // ================= BUILD PART RESPONSES =================
-        List<TestPartResponse> partResponses =
-                testParts.stream().map(tp -> {
+        // ================= BUILD RESPONSES (WITH GROUPING) =================
+        List<TestPartResponse> partResponses = testParts.stream().map(tp -> {
+            List<TestQuestion> tqList = questionsByPart.getOrDefault(tp.getTestPartId(), Collections.emptyList());
 
-                    List<TestQuestion> tqList =
-                            questionsByPart.getOrDefault(
-                                    tp.getTestPartId(),
-                                    Collections.emptyList()
-                            );
+            // Map để gom các câu hỏi vào nhóm theo passageId
+            // Key là passageId, hoặc questionId nếu là câu độc lập
+            Map<String, QuestionGroupResponse> groupsMap = new LinkedHashMap<>();
 
-                    Collections.shuffle(tqList);
+            for (TestQuestion tq : tqList) {
+                Question q = questionMap.get(tq.getQuestionId());
+                if (q == null) continue;
 
-                    List<QuestionResponse> questionResponses =
-                            tqList.stream().map(tq -> {
+                List<AnswerResponse> answers = answersByQuestionId.getOrDefault(q.getQuestionId(), Collections.emptyList());
 
-                                        Question q =
-                                                questionMap.get(tq.getQuestionId());
-                                        if (q == null) return null;
+                // Build Question DTO (để passage = null để tránh lặp dữ liệu trong JSON)
+                QuestionResponse qDto = new QuestionResponse(
+                        q.getQuestionId(), q.getExamPartId(), q.getQuestionText(),
+                        q.getQuestionType(), q.getExplanation(), tp.getTestPartId(),
+                        answers
+                );
 
-                                        List<AnswerResponse> answers =
-                                                answersByQuestionId.getOrDefault(
-                                                        q.getQuestionId(),
-                                                        Collections.emptyList()
-                                                );
+                if (q.getPassageId() != null) {
+                    // Nhóm theo Passage
+                    String groupKey = "P_" + q.getPassageId();
+                    if (!groupsMap.containsKey(groupKey)) {
+                        Passage p = passageMap.get(q.getPassageId());
+                        PassageResponse pDto = (p != null) ? new PassageResponse(
+                                p.getPassageId(), p.getContent(), p.getMediaUrl(), p.getPassageType()) : null;
+                        groupsMap.put(groupKey, new QuestionGroupResponse(pDto, new ArrayList<>()));
+                    }
+                    groupsMap.get(groupKey).getQuestions().add(qDto);
+                } else {
+                    // Câu hỏi độc lập -> Mỗi câu là 1 nhóm riêng
+                    String groupKey = "Q_" + q.getQuestionId();
+                    groupsMap.put(groupKey, new QuestionGroupResponse(null, new ArrayList<>(List.of(qDto))));
+                }
+            }
 
-                                        PassageResponse passageDto = null;
-                                        if (q.getPassageId() != null) {
-                                            Passage p =
-                                                    passageMap.get(q.getPassageId());
-                                            if (p != null) {
-                                                passageDto =
-                                                        new PassageResponse(
-                                                                p.getPassageId(),
-                                                                p.getContent(),
-                                                                p.getMediaUrl(),
-                                                                p.getPassageType()
-                                                        );
-                                            }
-                                        }
+            // Chuyển Map thành List và SHUFFLE CÁC NHÓM
+            List<QuestionGroupResponse> finalGroups = new ArrayList<>(groupsMap.values());
+            Collections.shuffle(finalGroups); // Chỉ shuffle các nhóm để đảm bảo câu hỏi cùng passage ko bị tách ra
 
-                                        return new QuestionResponse(
-                                                q.getQuestionId(),
-                                                q.getExamPartId(),
-                                                q.getQuestionText(),
-                                                q.getQuestionType(),
-                                                q.getExplanation(),
-                                                tp.getTestPartId(),
-                                                answers,
-                                                passageDto   // 👈 AUDIO PER QUESTION
-                                        );
+            return new TestPartResponse(tp.getTestPartId(), tp.getExamPartId(), tp.getNumQuestions(),finalGroups);
+        }).toList();
 
-                                    })
-                                    .filter(Objects::nonNull)
-                                    .toList();
-
-                    return new TestPartResponse(
-                            tp.getTestPartId(),
-                            tp.getExamPartId(),
-                            tp.getNumQuestions(),
-                            null,                 // ❌ không dùng passage cấp part
-                            questionResponses
-                    );
-
-                }).toList();
-
-        // ================= FINAL RESPONSE =================
         return new TestResponse(
-                test.getTestId(),
-                test.getTitle(),
-                test.getDescription(),
-                test.getExamTypeId(),
-                test.getCreatedBy(),
-                test.getCreatedAt(),
-                test.getBannerUrl(),
-                test.getDurationMinutes(),
-                test.getAvailableFrom(),
-                test.getAvailableTo(),
-                test.calculateStatus().name(),
-                maxAttempts,
-                attemptsUsed,
-                remaining,
-                true,
-                partResponses
+                test.getTestId(), test.getTitle(), test.getDescription(), test.getExamTypeId(),
+                test.getCreatedBy(), test.getCreatedAt(), test.getBannerUrl(), test.getDurationMinutes(),
+                test.getAvailableFrom(), test.getAvailableTo(), test.calculateStatus().name(),
+                maxAttempts, attemptsUsed, remaining, true, partResponses
+        );
+    }
+
+    // Hàm bổ trợ để build response trống
+    private TestResponse buildEmptyTestResponse(Test test, Integer maxAttempts, int attemptsUsed, Integer remaining) {
+        return new TestResponse(
+                test.getTestId(), test.getTitle(), test.getDescription(), test.getExamTypeId(),
+                test.getCreatedBy(), test.getCreatedAt(), test.getBannerUrl(), test.getDurationMinutes(),
+                test.getAvailableFrom(), test.getAvailableTo(), test.calculateStatus().name(),
+                maxAttempts, attemptsUsed, remaining, true, Collections.emptyList()
         );
     }
 
@@ -335,15 +257,15 @@ public class TestService {
 
 
 
-
-
     public TestAdminResponse getTestFullByIdAdmin(Long testId) {
-        // === LẤY DỮ LIỆU CƠ BẢN ===
+
+        // ===== 1. LẤY TEST =====
         Test test = testRepository.findById(testId)
                 .orElseThrow(() -> new RuntimeException("Test not found"));
 
-        // === BƯỚC 1: LẤY DỮ LIỆU HÀNG LOẠT ĐỂ TỐI ƯU HÓA ===
+        // ===== 2. LẤY TEST PARTS =====
         List<TestPart> testParts = testPartRepository.findByTestId(test.getTestId());
+
         if (testParts.isEmpty()) {
             return new TestAdminResponse(
                     test.getTestId(),
@@ -363,101 +285,156 @@ public class TestService {
             );
         }
 
-        List<Long> testPartIds = testParts.stream().map(TestPart::getTestPartId).toList();
+        List<Long> testPartIds = testParts.stream()
+                .map(TestPart::getTestPartId)
+                .toList();
 
-        // Lấy tất cả TestQuestion của các TestPart
-        List<TestQuestion> allTestQuestions = testQuestionRepository.findByTestPartIdIn(testPartIds);
-        Map<Long, List<TestQuestion>> questionsByPartId = allTestQuestions.stream()
-                .collect(Collectors.groupingBy(TestQuestion::getTestPartId));
+        // ===== 3. LOAD ALL TEST QUESTIONS =====
+        List<TestQuestion> allTestQuestions =
+                testQuestionRepository.findByTestPartIdIn(testPartIds);
 
-        // Lấy tất cả Question
-        List<Long> allQuestionIds = allTestQuestions.stream().map(TestQuestion::getQuestionId).toList();
-        Map<Long, Question> questionMap = questionRepository.findAllById(allQuestionIds).stream()
-                .collect(Collectors.toMap(Question::getQuestionId, q -> q));
+        Map<Long, List<TestQuestion>> questionsByPartId =
+                allTestQuestions.stream()
+                        .collect(Collectors.groupingBy(TestQuestion::getTestPartId));
 
-        // Lấy tất cả Passage
+        // ===== 4. LOAD ALL QUESTIONS =====
+        List<Long> allQuestionIds = allTestQuestions.stream()
+                .map(TestQuestion::getQuestionId)
+                .toList();
+
+        Map<Long, Question> questionMap =
+                questionRepository.findAllById(allQuestionIds)
+                        .stream()
+                        .collect(Collectors.toMap(
+                                Question::getQuestionId,
+                                q -> q
+                        ));
+
+        // ===== 5. LOAD ALL PASSAGES =====
         Set<Long> allPassageIds = questionMap.values().stream()
                 .map(Question::getPassageId)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
-        Map<Long, Passage> passageMap = passageRepository.findAllById(allPassageIds).stream()
-                .collect(Collectors.toMap(Passage::getPassageId, p -> p));
 
-        // Lấy tất cả Answer
+        Map<Long, Passage> passageMap =
+                passageRepository.findAllById(allPassageIds)
+                        .stream()
+                        .collect(Collectors.toMap(
+                                Passage::getPassageId,
+                                p -> p
+                        ));
+
+        // ===== 6. LOAD ALL EXAM PARTS (FIX N+1) =====
+        Set<Long> examPartIds = questionMap.values().stream()
+                .map(Question::getExamPartId)
+                .collect(Collectors.toSet());
+
+        Map<Long, ExamPart> examPartMap =
+                examPartRepository.findAllById(examPartIds)
+                        .stream()
+                        .collect(Collectors.toMap(
+                                ExamPart::getExamPartId,
+                                e -> e
+                        ));
+
+        // ===== 7. LOAD ALL ANSWERS =====
         Map<Long, List<AnswerAdminResponse>> answersByQuestionId =
                 answerService.getAnswersForMultipleQuestionsForAdmin(allQuestionIds);
 
-        // === BƯỚC 2: LẮP RÁP DỮ LIỆU TRONG BỘ NHỚ ===
-        List<TestPartAdminResponse> partResponses = testParts.stream().map(tp -> {
-            List<TestQuestion> tqList = questionsByPartId.getOrDefault(tp.getTestPartId(), Collections.emptyList());
+        // ===== 8. BUILD RESPONSE IN MEMORY =====
+        List<TestPartAdminResponse> partResponses = testParts.stream()
+                .map(tp -> {
 
-            // Lấy passage chung cho part này (nếu có)
-            PassageResponse passageResponseForPart = tqList.stream()
-                    .map(tq -> questionMap.get(tq.getQuestionId()))
-                    .filter(q -> q != null && q.getPassageId() != null)
-                    .findFirst()
-                    .map(q -> passageMap.get(q.getPassageId()))
-                    .filter(Objects::nonNull)
-                    .map(p -> new PassageResponse(
-                            p.getPassageId(),
-                            p.getContent(),
-                            p.getMediaUrl(),
-                            p.getPassageType()
-                    ))
-                    .orElse(null);
+                    List<TestQuestion> tqList =
+                            questionsByPartId.getOrDefault(
+                                    tp.getTestPartId(),
+                                    Collections.emptyList()
+                            );
 
-            // Lắp danh sách câu hỏi
-            List<QuestionAdminResponse> questionResponses = tqList.stream().map(tq -> {
-                Question q = questionMap.get(tq.getQuestionId());
-                if (q == null) return null;
+                    // ===== GROUP QUESTIONS BY PASSAGE =====
+                    Map<Long, List<Question>> groupedByPassage =
+                            tqList.stream()
+                                    .map(tq -> questionMap.get(tq.getQuestionId()))
+                                    .filter(Objects::nonNull)
+                                    .collect(Collectors.groupingBy(
+                                            q -> q.getPassageId() == null
+                                                    ? -1L
+                                                    : q.getPassageId()
+                                    ));
 
-                List<AnswerAdminResponse> answers =
-                        answersByQuestionId.getOrDefault(q.getQuestionId(), Collections.emptyList());
+                    List<QuestionGroupAdminResponse> groupResponses =
+                            groupedByPassage.entrySet()
+                                    .stream()
+                                    .map(entry -> {
 
-                PassageResponse passageDto = null;
-                if (q.getPassageId() != null) {
-                    Passage p = passageMap.get(q.getPassageId());
-                    if (p != null) {
-                        passageDto = new PassageResponse(
-                                p.getPassageId(),
-                                p.getContent(),
-                                p.getMediaUrl(),
-                                p.getPassageType()
-                        );
-                    }
-                }
+                                        Long passageId = entry.getKey();
+                                        List<Question> questionsInGroup = entry.getValue();
 
-                // Lấy examTypeId từ examPart
-                Long examTypeId = examPartRepository.findById(q.getExamPartId())
-                        .map(ExamPart::getExamTypeId)
-                        .orElse(null);
+                                        // ===== MAP PASSAGE =====
+                                        PassageResponse passageResponse = null;
 
-                return new QuestionAdminResponse(
-                        q.getQuestionId(),
-                        examTypeId,
-                        q.getExamPartId(),
-                        q.getQuestionText(),
-                        q.getQuestionType(),
-                        q.getExplanation(),
-                        passageDto,
-                        tp.getTestPartId(),
-                        answers,
-                        q.getClassId(),
-                        q.getIsBank()
-                );
-            }).filter(Objects::nonNull).toList();
+                                        if (!passageId.equals(-1L)) {
+                                            Passage p = passageMap.get(passageId);
+                                            if (p != null) {
+                                                passageResponse = new PassageResponse(
+                                                        p.getPassageId(),
+                                                        p.getContent(),
+                                                        p.getMediaUrl(),
+                                                        p.getPassageType()
+                                                );
+                                            }
+                                        }
 
-            // Tạo TestPartAdminResponse
-            return new TestPartAdminResponse(
-                    tp.getTestPartId(),
-                    tp.getExamPartId(),
-                    tp.getNumQuestions(),
-                    passageResponseForPart,
-                    questionResponses
-            );
-        }).toList();
+                                        // ===== MAP QUESTIONS =====
+                                        List<QuestionAdminResponse> questionResponses =
+                                                questionsInGroup.stream()
+                                                        .map(q -> {
 
-        // === BƯỚC 3: TRẢ VỀ RESPONSE CHO ADMIN ===
+                                                            List<AnswerAdminResponse> answers =
+                                                                    answersByQuestionId.getOrDefault(
+                                                                            q.getQuestionId(),
+                                                                            Collections.emptyList()
+                                                                    );
+
+                                                            Long examTypeId =
+                                                                    Optional.ofNullable(
+                                                                                    examPartMap.get(q.getExamPartId())
+                                                                            )
+                                                                            .map(ExamPart::getExamTypeId)
+                                                                            .orElse(null);
+
+                                                            return new QuestionAdminResponse(
+                                                                    q.getQuestionId(),
+                                                                    examTypeId,
+                                                                    q.getExamPartId(),
+                                                                    q.getQuestionText(),
+                                                                    q.getQuestionType(),
+                                                                    q.getExplanation(),
+                                                                    tp.getTestPartId(),
+                                                                    answers,
+                                                                    q.getClassId(),
+                                                                    q.getIsBank()
+                                                            );
+                                                        })
+                                                        .toList();
+
+                                        return new QuestionGroupAdminResponse(
+                                                passageResponse,
+                                                questionResponses
+                                        );
+                                    })
+                                    .toList();
+
+                    return new TestPartAdminResponse(
+                            tp.getTestPartId(),
+                            tp.getExamPartId(),
+                            tp.getNumQuestions(),
+                            groupResponses
+                    );
+                })
+                .toList();
+
+        // ===== 9. RETURN FINAL RESPONSE =====
         return new TestAdminResponse(
                 test.getTestId(),
                 test.getTitle(),

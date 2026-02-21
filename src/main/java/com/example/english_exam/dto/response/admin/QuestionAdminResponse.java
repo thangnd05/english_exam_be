@@ -28,7 +28,6 @@ public class QuestionAdminResponse extends QuestionResponse {
             String questionText,
             Question.QuestionType questionType,
             String explanation,
-            PassageResponse passage,
             Long testPartId,
             List<AnswerAdminResponse> answers,
             Long classId,
@@ -42,8 +41,7 @@ public class QuestionAdminResponse extends QuestionResponse {
                 questionType,
                 explanation,
                 testPartId,
-                answers != null ? new ArrayList<>(answers) : null,
-                passage   // 👈 truyền xuống class cha
+                answers != null ? new ArrayList<>(answers) : null
         );
 
         this.examTypeId = examTypeId;

@@ -1,18 +1,21 @@
 package com.example.english_exam.dto.response.user;
 
-import com.example.english_exam.dto.response.PassageResponse;
 import lombok.*;
 import java.util.List;
 
 @Getter
 @Setter
 @NoArgsConstructor
-@AllArgsConstructor
 public class TestPartResponse {
     private Long testPartId;
     private Long examPartId;
-    private int numQuestions;
-    private PassageResponse passage; // ✅ Chuyển passage ra đây
+    private Integer numQuestions;
+    private List<QuestionGroupResponse> questionGroups; // Chuyển từ List<QuestionResponse> sang Group
 
-    private List<QuestionResponse> questions;
+    public TestPartResponse(Long testPartId, Long examPartId, Integer numQuestions, List<QuestionGroupResponse> questionGroups) {
+        this.testPartId = testPartId;
+        this.examPartId = examPartId;
+        this.numQuestions = numQuestions;
+        this.questionGroups = questionGroups;
+    }
 }

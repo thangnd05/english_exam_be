@@ -18,7 +18,5 @@ public class TestPartAdminResponse {
 
     private Integer numQuestions;
 
-    private PassageResponse passage;
-
-    private List<QuestionAdminResponse> questions;
+    private List<QuestionGroupAdminResponse> questionGroups;
 }

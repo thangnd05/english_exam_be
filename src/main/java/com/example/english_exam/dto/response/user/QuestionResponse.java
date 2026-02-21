@@ -13,19 +13,16 @@ import java.util.List;
 @Setter
 @NoArgsConstructor
 public class QuestionResponse {
-    protected Long questionId;
-    protected Long examPartId;
-    protected String questionText;
-    protected Question.QuestionType questionType;
-    protected String explanation;
+    private Long questionId;
+    private Long examPartId;
+    private String questionText;
+    private Question.QuestionType questionType;
+    private String explanation;
 
-    protected Long testPartId;
-    protected List<AnswerResponse> answers;
-    protected PassageResponse passage;
-    /** passage_id của câu hỏi (null = câu độc lập). Dùng để FE nhóm câu theo passage khi chọn. */
-    protected Long passageId;
+    private Long testPartId;
+    private List<AnswerResponse> answers;
 
-    public QuestionResponse(Long questionId, Long examPartId, String questionText, Question.QuestionType questionType, String explanation, Long testPartId, List<AnswerResponse> answers, PassageResponse passage) {
+    public QuestionResponse(Long questionId, Long examPartId, String questionText, Question.QuestionType questionType, String explanation, Long testPartId, List<AnswerResponse> answers) {
         this.questionId = questionId;
         this.examPartId = examPartId;
         this.questionText = questionText;
@@ -33,7 +30,6 @@ public class QuestionResponse {
         this.explanation = explanation;
         this.testPartId = testPartId;
         this.answers = answers;
-        this.passage = passage;
     }
 }
 

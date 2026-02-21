@@ -78,7 +78,6 @@ public class QuestionService {
             dto.setQuestionText(q.getQuestionText());
             dto.setQuestionType(q.getQuestionType());
             dto.setExplanation(q.getExplanation());
-            dto.setPassageId(q.getPassageId());
 
             List<Answer> answers = answerRepository.findByQuestionId(q.getQuestionId());
             List<AnswerResponse> answerDtos = answers.stream()
@@ -483,7 +482,6 @@ public class QuestionService {
                 question.getQuestionText(),
                 question.getQuestionType(),
                 question.getExplanation(),
-                passageDto,
                 testPartId,
                 answerDtos,
                 question.getClassId(),
@@ -534,7 +532,6 @@ public class QuestionService {
                 question.getQuestionText(),
                 question.getQuestionType(),
                 question.getExplanation(),
-                passageDto,
                 null, // testPartId
                 answers,
                 question.getClassId(),
