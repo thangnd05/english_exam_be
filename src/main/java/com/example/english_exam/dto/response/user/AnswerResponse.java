@@ -1,17 +1,13 @@
 package com.example.english_exam.dto.response.user;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 
 @Getter
-@Setter
-@NoArgsConstructor
+@Builder
 @AllArgsConstructor
 public class AnswerResponse {
-    protected Long answerId;
-    protected String answerText;
-    protected String answerLabel;
+    private final Long answerId;
+    private final String answerText;
+    private final String answerLabel;
 }
 

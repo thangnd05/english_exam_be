@@ -506,7 +506,13 @@ public class QuestionService {
             passageDto = new PassageResponse(passage.getPassageId(), passage.getContent(), passage.getMediaUrl(), passage.getPassageType());
         }
         List<AnswerAdminResponse> answerDtos = answerEntities.stream()
-                .map(a -> new AnswerAdminResponse(a.getAnswerId(), a.getAnswerText(), a.getIsCorrect(), a.getAnswerLabel()))
+                .map(a -> AnswerAdminResponse.builder()
+                        .answerId(a.getAnswerId())
+                        .answerText(a.getAnswerText())
+                        .answerLabel(a.getAnswerLabel())
+                        .isCorrect(a.getIsCorrect())
+                        .build()
+                )
                 .toList();
         return QuestionAdminResponse.builder()
                 .questionId(question.getQuestionId())
@@ -522,41 +528,35 @@ public class QuestionService {
     }
 
     public QuestionAdminResponse getQuestionDetailAdmin(Long questionId) {
+
         Question question = questionRepository.findById(questionId)
                 .orElseThrow(() -> new RuntimeException("Question not found"));
 
-        // 🔹 Lấy examTypeId qua examPart
         Long examTypeId = examPartRepository.findById(question.getExamPartId())
-                .map(p -> p.getExamTypeId())
+                .map(ExamPart::getExamTypeId)
                 .orElse(null);
 
-        // 🔹 Lấy passage
-        PassageResponse passageDto = null;
-        if (question.getPassageId() != null) {
-            Passage p = passageRepository.findById(question.getPassageId())
-                    .orElse(null);
-            if (p != null) {
-                passageDto = new PassageResponse(
+        PassageResponse passageDto = Optional.ofNullable(question.getPassageId())
+                .flatMap(passageRepository::findById)
+                .map(p -> new PassageResponse(
                         p.getPassageId(),
                         p.getContent(),
                         p.getMediaUrl(),
                         p.getPassageType()
-                );
-            }
-        }
+                ))
+                .orElse(null);
 
-        // 🔹 Lấy danh sách đáp án
         List<AnswerAdminResponse> answers = answerRepository.findByQuestionId(questionId)
                 .stream()
-                .map(a -> new AnswerAdminResponse(
-                        a.getAnswerId(),
-                        a.getAnswerText(),
-                        a.getIsCorrect(),
-                        a.getAnswerLabel()
-                ))
+                .map(a -> AnswerAdminResponse.builder()
+                        .answerId(a.getAnswerId())
+                        .answerText(a.getAnswerText())
+                        .answerLabel(a.getAnswerLabel())
+                        .isCorrect(a.getIsCorrect())
+                        .build()
+                )
                 .toList();
 
-        // 🔹 Build DTO trả ra
         return QuestionAdminResponse.builder()
                 .questionId(question.getQuestionId())
                 .examPartId(question.getExamPartId())
@@ -568,7 +568,6 @@ public class QuestionService {
                 .isBank(question.getIsBank())
                 .answers(answers)
                 .build();
-
     }
 
 

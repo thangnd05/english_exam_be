@@ -7,8 +7,6 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 @Getter
-@Setter
-@NoArgsConstructor
 @AllArgsConstructor
 @Builder
 public class TestResponse {
@@ -27,7 +25,7 @@ public class TestResponse {
     private Integer attemptsUsed;
     private Integer remainingAttempts;
     private Boolean canDoTest;
-    private List<?> parts;
+    private List<TestPartResponse> parts;
 
 }
 

@@ -4,13 +4,13 @@ import com.example.english_exam.dto.response.user.AnswerResponse;
 import lombok.*;
 
 @Getter
-@Setter
-@NoArgsConstructor
-public class AnswerAdminResponse extends AnswerResponse {
-    private Boolean isCorrect;
+@Builder
+@AllArgsConstructor
+public class AnswerAdminResponse {
 
-    public AnswerAdminResponse(Long answerId, String answerText, Boolean isCorrect, String answerLabel) {
-        super(answerId, answerText, answerLabel);
-        this.isCorrect = isCorrect;
-    }
+    private final Long answerId;
+    private final String answerText;
+    private final String answerLabel;
+    private final Boolean isCorrect;
 }
+

@@ -311,22 +311,22 @@ public class TestService {
         List<TestPart> testParts = testPartRepository.findByTestId(test.getTestId());
 
         if (testParts.isEmpty()) {
-            return new TestAdminResponse(
-                    test.getTestId(),
-                    test.getTitle(),
-                    test.getDescription(),
-                    test.getExamTypeId(),
-                    test.getCreatedBy(),
-                    test.getCreatedAt(),
-                    test.getBannerUrl(),
-                    test.getDurationMinutes(),
-                    test.getAvailableFrom(),
-                    test.getAvailableTo(),
-                    test.calculateStatus().name(),
-                    test.getMaxAttempts(),
-                    Collections.emptyList(),
-                    test.getClassId()
-            );
+            return TestAdminResponse.builder()
+                    .testId(test.getTestId())
+                    .title(test.getTitle())
+                    .description(test.getDescription())
+                    .examTypeId(test.getExamTypeId())
+                    .createdBy(test.getCreatedBy())
+                    .createdAt(test.getCreatedAt())
+                    .bannerUrl(test.getBannerUrl())
+                    .durationMinutes(test.getDurationMinutes())
+                    .availableFrom(test.getAvailableFrom())
+                    .availableTo(test.getAvailableTo())
+                    .status(test.calculateStatus().name())
+                    .maxAttempts(test.getMaxAttempts())
+                    .classId(test.getClassId())
+                    .parts(Collections.emptyList())
+                    .build();
         }
 
         List<Long> testPartIds = testParts.stream()
@@ -477,22 +477,22 @@ public class TestService {
                 .toList();
 
         // ===== 9. RETURN FINAL RESPONSE =====
-        return new TestAdminResponse(
-                test.getTestId(),
-                test.getTitle(),
-                test.getDescription(),
-                test.getExamTypeId(),
-                test.getCreatedBy(),
-                test.getCreatedAt(),
-                test.getBannerUrl(),
-                test.getDurationMinutes(),
-                test.getAvailableFrom(),
-                test.getAvailableTo(),
-                test.calculateStatus().name(),
-                test.getMaxAttempts(),
-                partResponses,
-                test.getClassId()
-        );
+        return TestAdminResponse.builder()
+                .testId(test.getTestId())
+                .title(test.getTitle())
+                .description(test.getDescription())
+                .examTypeId(test.getExamTypeId())
+                .createdBy(test.getCreatedBy())
+                .createdAt(test.getCreatedAt())
+                .bannerUrl(test.getBannerUrl())
+                .durationMinutes(test.getDurationMinutes())
+                .availableFrom(test.getAvailableFrom())
+                .availableTo(test.getAvailableTo())
+                .status(test.calculateStatus().name())
+                .maxAttempts(test.getMaxAttempts())
+                .classId(test.getClassId())
+                .parts(partResponses)
+                .build();
     }
 
 

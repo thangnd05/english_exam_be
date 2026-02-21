@@ -82,12 +82,12 @@ public class AnswerService {
                 .collect(Collectors.groupingBy(
                         Answer::getQuestionId,
                         Collectors.mapping(
-                                a -> new AnswerAdminResponse(
-                                        a.getAnswerId(),
-                                        a.getAnswerText(),
-                                        a.getIsCorrect(),
-                                        a.getAnswerLabel()
-                                ),
+                                a -> AnswerAdminResponse.builder()
+                                        .answerId(a.getAnswerId())
+                                        .answerText(a.getAnswerText())
+                                        .answerLabel(a.getAnswerLabel())
+                                        .isCorrect(a.getIsCorrect())
+                                        .build(),
                                 Collectors.toList()
                         )
                 ));

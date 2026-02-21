@@ -1,25 +1,28 @@
 package com.example.english_exam.dto.response.admin;
 
-import com.example.english_exam.dto.response.user.TestResponse;
 import lombok.*;
 import java.time.LocalDateTime;
 import java.util.List;
 
 @Getter
-@Setter
-@NoArgsConstructor
+@Builder
 @AllArgsConstructor
-public class TestAdminResponse extends TestResponse {
+public class TestAdminResponse {
+
+    private Long testId;
+    private String title;
+    private String description;
+    private Long examTypeId;
+    private Long createdBy;
+    private LocalDateTime createdAt;
+    private String bannerUrl;
+    private Integer durationMinutes;
+    private LocalDateTime availableFrom;
+    private LocalDateTime availableTo;
+    private String status;
+    private Integer maxAttempts;
+
     private Long classId;
 
-    /** Constructor đầy đủ cho admin (parts là List<TestPartAdminResponse>). */
-    public TestAdminResponse(Long testId, String title, String description, Long examTypeId,
-                             Long createdBy, LocalDateTime createdAt, String bannerUrl,
-                             Integer durationMinutes, LocalDateTime availableFrom, LocalDateTime availableTo,
-                             String status, Integer maxAttempts, List<TestPartAdminResponse> parts, Long classId) {
-        super(testId, title, description, examTypeId, createdBy, createdAt, bannerUrl,
-                durationMinutes, availableFrom, availableTo, status, maxAttempts,
-                null, null, null, parts);
-        this.classId = classId;
-    }
+    private List<TestPartAdminResponse> parts;
 }
