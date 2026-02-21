@@ -72,8 +72,6 @@ public class TestService {
 
     public TestResponse buildUserTestSummary(Test test, Long userId) {
 
-        TestResponse response = new TestResponse(test);
-
         long attemptsUsed =
                 userTestRepository.countByTestIdAndUserId(
                         test.getTestId(),
@@ -86,11 +84,24 @@ public class TestService {
         int remainingAttempts =
                 (int) Math.max(0, maxAttempts - attemptsUsed);
 
-        response.setAttemptsUsed((int) attemptsUsed);
-        response.setRemainingAttempts(remainingAttempts);
-        response.setCanDoTest(remainingAttempts > 0);
-
-        return response;
+        return TestResponse.builder()
+                .testId(test.getTestId())
+                .title(test.getTitle())
+                .description(test.getDescription())
+                .examTypeId(test.getExamTypeId())
+                .createdBy(test.getCreatedBy())
+                .createdAt(test.getCreatedAt())
+                .bannerUrl(test.getBannerUrl())
+                .durationMinutes(test.getDurationMinutes())
+                .availableFrom(test.getAvailableFrom())
+                .availableTo(test.getAvailableTo())
+                .status(test.calculateStatus().name())
+                .maxAttempts(maxAttempts)
+                .attemptsUsed((int) attemptsUsed)
+                .remainingAttempts(remainingAttempts)
+                .canDoTest(remainingAttempts > 0)
+                .parts(null)
+                .build();
     }
 
 
@@ -156,12 +167,25 @@ public class TestService {
         Integer remaining = (maxAttempts != null) ? Math.max(0, maxAttempts - attemptsUsed) : null;
 
         if (maxAttempts != null && remaining <= 0) {
-            TestResponse blocked = new TestResponse(test);
-            blocked.setCanDoTest(false);
-            blocked.setAttemptsUsed(attemptsUsed);
-            blocked.setRemainingAttempts(remaining);
-            blocked.setStatus("FORBIDDEN");
-            return blocked;
+
+            return TestResponse.builder()
+                    .testId(test.getTestId())
+                    .title(test.getTitle())
+                    .description(test.getDescription())
+                    .examTypeId(test.getExamTypeId())
+                    .createdBy(test.getCreatedBy())
+                    .createdAt(test.getCreatedAt())
+                    .bannerUrl(test.getBannerUrl())
+                    .durationMinutes(test.getDurationMinutes())
+                    .availableFrom(test.getAvailableFrom())
+                    .availableTo(test.getAvailableTo())
+                    .status("FORBIDDEN")
+                    .maxAttempts(maxAttempts)
+                    .attemptsUsed(attemptsUsed)
+                    .remainingAttempts(remaining)
+                    .canDoTest(false)
+                    .parts(null)
+                    .build();
         }
 
         // ================= LOAD DATA HÀNG LOẠT =================
@@ -203,11 +227,15 @@ public class TestService {
                 List<AnswerResponse> answers = answersByQuestionId.getOrDefault(q.getQuestionId(), Collections.emptyList());
 
                 // Build Question DTO (để passage = null để tránh lặp dữ liệu trong JSON)
-                QuestionResponse qDto = new QuestionResponse(
-                        q.getQuestionId(), q.getExamPartId(), q.getQuestionText(),
-                        q.getQuestionType(), q.getExplanation(), tp.getTestPartId(),
-                        answers
-                );
+                // Khởi tạo cho User
+                QuestionResponse qDto = QuestionResponse.builder()
+                        .questionId(q.getQuestionId())
+                        .examPartId(q.getExamPartId())
+                        .questionText(q.getQuestionText())
+                        .questionType(q.getQuestionType())
+                        .testPartId(tp.getTestPartId())
+                        .answers(answers)
+                        .build();
 
                 if (q.getPassageId() != null) {
                     // Nhóm theo Passage
@@ -230,16 +258,32 @@ public class TestService {
             List<QuestionGroupResponse> finalGroups = new ArrayList<>(groupsMap.values());
             Collections.shuffle(finalGroups); // Chỉ shuffle các nhóm để đảm bảo câu hỏi cùng passage ko bị tách ra
 
-            return new TestPartResponse(tp.getTestPartId(), tp.getExamPartId(), tp.getNumQuestions(),finalGroups);
+            return new TestPartResponse(tp.getTestPartId(), tp.getExamPartId(), finalGroups);
         }).toList();
 
-        return new TestResponse(
-                test.getTestId(), test.getTitle(), test.getDescription(), test.getExamTypeId(),
-                test.getCreatedBy(), test.getCreatedAt(), test.getBannerUrl(), test.getDurationMinutes(),
-                test.getAvailableFrom(), test.getAvailableTo(), test.calculateStatus().name(),
-                maxAttempts, attemptsUsed, remaining, true, partResponses
-        );
+        return TestResponse.builder()
+                .testId(test.getTestId())
+                .title(test.getTitle())
+                .description(test.getDescription())
+                .examTypeId(test.getExamTypeId())
+                .createdBy(test.getCreatedBy())
+                .createdAt(test.getCreatedAt())
+                .bannerUrl(test.getBannerUrl())
+                .durationMinutes(test.getDurationMinutes())
+                .availableFrom(test.getAvailableFrom())
+                .availableTo(test.getAvailableTo())
+                .status(test.calculateStatus().name())
+                .maxAttempts(maxAttempts)
+                .attemptsUsed(attemptsUsed)
+                .remainingAttempts(remaining)
+                .canDoTest(true)
+                .parts(partResponses)
+                .build();
     }
+
+
+
+
 
     // Hàm bổ trợ để build response trống
     private TestResponse buildEmptyTestResponse(Test test, Integer maxAttempts, int attemptsUsed, Integer remaining) {
@@ -403,18 +447,17 @@ public class TestService {
                                                                             .map(ExamPart::getExamTypeId)
                                                                             .orElse(null);
 
-                                                            return new QuestionAdminResponse(
-                                                                    q.getQuestionId(),
-                                                                    examTypeId,
-                                                                    q.getExamPartId(),
-                                                                    q.getQuestionText(),
-                                                                    q.getQuestionType(),
-                                                                    q.getExplanation(),
-                                                                    tp.getTestPartId(),
-                                                                    answers,
-                                                                    q.getClassId(),
-                                                                    q.getIsBank()
-                                                            );
+                                                            return QuestionAdminResponse.builder()
+                                                                    .questionId(q.getQuestionId())
+                                                                    .examPartId(q.getExamPartId())
+                                                                    .questionText(q.getQuestionText())
+                                                                    .questionType(q.getQuestionType())
+                                                                    .explanation(q.getExplanation())
+                                                                    .examTypeId(examTypeId)
+                                                                    .classId(q.getClassId())
+                                                                    .isBank(q.getIsBank())
+                                                                    .answers(answers)
+                                                                    .build();
                                                         })
                                                         .toList();
 
@@ -428,7 +471,6 @@ public class TestService {
                     return new TestPartAdminResponse(
                             tp.getTestPartId(),
                             tp.getExamPartId(),
-                            tp.getNumQuestions(),
                             groupResponses
                     );
                 })

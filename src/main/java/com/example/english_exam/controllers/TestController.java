@@ -187,22 +187,23 @@ Bước 4: .toList() - Chuyển stream kết quả thành List
             HttpServletRequest request
     ) {
 
-        // 🔥 Lấy userId 1 lần và đảm bảo không bị gán lại
         final Long currentUserId;
+
         try {
             currentUserId = authUtils.getUserId(request);
         } catch (Exception e) {
-            // Nếu không đăng nhập
-            return ResponseEntity.ok(
-                    testService.getAllTestsByAdmin()
-                            .stream()
-                            .filter(t -> t.getExamTypeId().equals(examTypeId))
-                            .filter(t -> t.getClassId() == null)
-                            .map(TestResponse::new)
-                            .toList()
-            );
+            // ❌ Chưa đăng nhập
+            List<TestResponse> responses = testService.getAllTestsByAdmin()
+                    .stream()
+                    .filter(t -> t.getExamTypeId().equals(examTypeId))
+                    .filter(t -> t.getClassId() == null)
+                    .map(test -> testService.buildUserTestSummary(test, null))
+                    .toList();
+
+            return ResponseEntity.ok(responses);
         }
 
+        // ✅ Đã đăng nhập
         List<TestResponse> responses = testService.getAllTestsByAdmin()
                 .stream()
                 .filter(t -> t.getExamTypeId().equals(examTypeId))
@@ -234,25 +235,42 @@ Bước 4: .toList() - Chuyển stream kết quả thành List
     }
 
     @GetMapping("/by-class/{classId}")
-    public ResponseEntity<?> getTestsByClass(@PathVariable Long classId, HttpServletRequest request) {
-        List<Test> tests = testService.getTestByClassId(classId, request);
+    public ResponseEntity<?> getTestsByClass(
+            @PathVariable Long classId,
+            HttpServletRequest request
+    ) {
 
-        if (tests.isEmpty()) {
+        Long currentUserId = authUtils.getUserId(request);
+
+        List<TestResponse> responses = testService
+                .getTestByClassId(classId, request)
+                .stream()
+                .map(test -> testService.buildUserTestSummary(test, currentUserId))
+                .toList();
+
+        if (responses.isEmpty()) {
             return ResponseEntity.ok(Map.of("message", "Không có bài test nào trong lớp này"));
         }
 
-        return ResponseEntity.ok(tests.stream().map(TestResponse::new).toList());
+        return ResponseEntity.ok(responses);
     }
 
     @GetMapping("/my-all-test")
     public ResponseEntity<?> getTestsCreateBy(HttpServletRequest request) {
-        List<Test> tests = testService.getTestByCreateBy(request);
 
-        if (tests.isEmpty()) {
+        Long currentUserId = authUtils.getUserId(request);
+
+        List<TestResponse> responses = testService
+                .getTestByCreateBy(request)
+                .stream()
+                .map(test -> testService.buildUserTestSummary(test, currentUserId))
+                .toList();
+
+        if (responses.isEmpty()) {
             return ResponseEntity.ok(Map.of("message", "Không có bài test nào trong lớp này"));
         }
 
-        return ResponseEntity.ok(tests.stream().map(TestResponse::new).toList());
+        return ResponseEntity.ok(responses);
     }
 
     @GetMapping("/my-tests")

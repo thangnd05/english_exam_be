@@ -1,51 +1,24 @@
 package com.example.english_exam.dto.response.admin;
 
-import com.example.english_exam.dto.response.PassageResponse;
-import com.example.english_exam.dto.response.user.QuestionResponse;
 import com.example.english_exam.models.Question;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
-
-import java.util.ArrayList;
+import lombok.*;
 import java.util.List;
 
 @Getter
-@Setter
-@NoArgsConstructor
-public class QuestionAdminResponse extends QuestionResponse {
+@Builder
+@AllArgsConstructor
+public class QuestionAdminResponse {
 
-    private Long examTypeId;
-    private Long classId;
+    private final Long questionId;
+    private final Long examPartId;
+    private final String questionText;
+    private final Question.QuestionType questionType;
+    private final String explanation;
 
-    /** true = câu trong kho; false = câu tạo gắn thẳng đề */
-    private Boolean isBank;
+    // Admin-specific fields
+    private final Long examTypeId;
+    private final Long classId;
+    private final Boolean isBank;
 
-    public QuestionAdminResponse(
-            Long questionId,
-            Long examTypeId,
-            Long examPartId,
-            String questionText,
-            Question.QuestionType questionType,
-            String explanation,
-            Long testPartId,
-            List<AnswerAdminResponse> answers,
-            Long classId,
-            Boolean isBank
-    ) {
-
-        super(
-                questionId,
-                examPartId,
-                questionText,
-                questionType,
-                explanation,
-                testPartId,
-                answers != null ? new ArrayList<>(answers) : null
-        );
-
-        this.examTypeId = examTypeId;
-        this.classId = classId;
-        this.isBank = isBank;
-    }
+    private final List<AnswerAdminResponse> answers;
 }

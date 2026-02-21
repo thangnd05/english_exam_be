@@ -97,6 +97,7 @@ public class ClassController {
             return ResponseEntity.status(404).body(Map.of("error", e.getMessage()));
         }
     }
+
     @GetMapping("/{classId}/chapters/{chapterId}/tests")
     public ResponseEntity<?> getTestsByClassAndChapter(@PathVariable Long classId,@PathVariable Long chapterId, HttpServletRequest request) {
         List<Test> tests = testService.getTestByClassIdAndChapterId(classId,chapterId, request);
@@ -105,6 +106,27 @@ public class ClassController {
             return ResponseEntity.ok(Map.of("message", "Không có bài test nào trong lớp này"));
         }
 
-        return ResponseEntity.ok(tests.stream().map(TestResponse::new).toList());
-    }
+        return ResponseEntity.ok(
+                tests.stream()
+                        .map(test -> TestResponse.builder()
+                                .testId(test.getTestId())
+                                .title(test.getTitle())
+                                .description(test.getDescription())
+                                .examTypeId(test.getExamTypeId())
+                                .createdBy(test.getCreatedBy())
+                                .createdAt(test.getCreatedAt())
+                                .bannerUrl(test.getBannerUrl())
+                                .durationMinutes(test.getDurationMinutes())
+                                .availableFrom(test.getAvailableFrom())
+                                .availableTo(test.getAvailableTo())
+                                .status(test.calculateStatus().name())
+                                .maxAttempts(test.getMaxAttempts())
+                                .attemptsUsed(null)
+                                .remainingAttempts(null)
+                                .canDoTest(true)
+                                .parts(null)
+                                .build()
+                        )
+                        .toList()
+        );    }
 }

@@ -16,7 +16,5 @@ public class TestPartAdminResponse {
 
     private Long examPartId;
 
-    private Integer numQuestions;
-
     private List<QuestionGroupAdminResponse> questionGroups;
 }

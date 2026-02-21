@@ -17,10 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -35,6 +32,7 @@ public class QuestionService {
     private final CloudinaryService cloudinaryService;
     private final AuthUtils authUtils;
     private final PassageMediaRepository passageMediaRepository;
+    private final AnswerService answerService;
 
 
 
@@ -56,39 +54,74 @@ public class QuestionService {
      * Cá nhân (classId == null): chỉ câu của user đăng nhập (created_by = currentUserId, class_id/chapter_id NULL).
      * Lớp: classId (+ chapterId nếu có).
      */
-    public List<QuestionResponse> getQuestionsByPart(Long examPartId, Long classId, Long chapterId, HttpServletRequest request) {
+    private List<Question> fetchQuestions(
+            Long examPartId,
+            Long classId,
+            Long chapterId,
+            Long currentUserId
+    ) {
+
+        if (classId == null) {
+            return questionRepository
+                    .findByExamPartIdAndCreatedByAndClassIdIsNullAndChapterIdIsNull(
+                            examPartId, currentUserId);
+        }
+
+        if (chapterId != null) {
+            return questionRepository
+                    .findByExamPartIdAndClassIdAndChapterId(
+                            examPartId, classId, chapterId);
+        }
+
+        return questionRepository
+                .findByExamPartIdAndClassId(
+                        examPartId, classId);
+    }
+
+    public List<QuestionResponse> getQuestionsByPart(
+            Long examPartId,
+            Long classId,
+            Long chapterId,
+            HttpServletRequest request
+    ) {
+
         Long currentUserId = authUtils.getUserId(request);
-        List<Question> questions;
 
-        if (classId != null) {
-            if (chapterId != null) {
-                questions = questionRepository.findByExamPartIdAndClassIdAndChapterId(examPartId, classId, chapterId);
-            } else {
-                questions = questionRepository.findByExamPartIdAndClassId(examPartId, classId);
-            }
-        } else {
-            questions = questionRepository.findByExamPartIdAndCreatedByAndClassIdIsNullAndChapterIdIsNull(examPartId, currentUserId);
+        List<Question> questions = fetchQuestions(
+                examPartId,
+                classId,
+                chapterId,
+                currentUserId
+        );
+
+        if (questions.isEmpty()) {
+            return Collections.emptyList();
         }
 
-        List<QuestionResponse> responses = new ArrayList<>();
-        for (Question q : questions) {
-            QuestionResponse dto = new QuestionResponse();
-            dto.setQuestionId(q.getQuestionId());
-            dto.setExamPartId(q.getExamPartId());
-            dto.setQuestionText(q.getQuestionText());
-            dto.setQuestionType(q.getQuestionType());
-            dto.setExplanation(q.getExplanation());
+        // ===== BULK LOAD ANSWERS (FIX N+1) =====
+        List<Long> questionIds = questions.stream()
+                .map(Question::getQuestionId)
+                .toList();
 
-            List<Answer> answers = answerRepository.findByQuestionId(q.getQuestionId());
-            List<AnswerResponse> answerDtos = answers.stream()
-                    .map(a -> new AnswerResponse(a.getAnswerId(), a.getAnswerText(), a.getAnswerLabel()))
-                    .collect(Collectors.toList());
+        Map<Long, List<AnswerResponse>> answersByQuestionId =
+                answerService.getAnswersForMultipleQuestions(questionIds);
 
-            dto.setAnswers(answerDtos);
-            responses.add(dto);
-        }
-
-        return responses;
+        // ===== MAP USING BUILDER =====
+        return questions.stream()
+                .map(q -> QuestionResponse.builder()
+                        .questionId(q.getQuestionId())
+                        .examPartId(q.getExamPartId())
+                        .questionText(q.getQuestionText())
+                        .questionType(q.getQuestionType())
+                        .answers(
+                                answersByQuestionId.getOrDefault(
+                                        q.getQuestionId(),
+                                        Collections.emptyList()
+                                )
+                        )
+                        .build()
+                )
+                .toList();
     }
 
 
@@ -475,18 +508,17 @@ public class QuestionService {
         List<AnswerAdminResponse> answerDtos = answerEntities.stream()
                 .map(a -> new AnswerAdminResponse(a.getAnswerId(), a.getAnswerText(), a.getIsCorrect(), a.getAnswerLabel()))
                 .toList();
-        return new QuestionAdminResponse(
-                question.getQuestionId(),
-                examTypeId,
-                question.getExamPartId(),
-                question.getQuestionText(),
-                question.getQuestionType(),
-                question.getExplanation(),
-                testPartId,
-                answerDtos,
-                question.getClassId(),
-                question.getIsBank()
-        );
+        return QuestionAdminResponse.builder()
+                .questionId(question.getQuestionId())
+                .examPartId(question.getExamPartId())
+                .questionText(question.getQuestionText())
+                .questionType(question.getQuestionType())
+                .explanation(question.getExplanation())
+                .examTypeId(examTypeId)
+                .classId(question.getClassId())
+                .isBank(question.getIsBank())
+                .answers(answerDtos)
+                .build();
     }
 
     public QuestionAdminResponse getQuestionDetailAdmin(Long questionId) {
@@ -525,18 +557,17 @@ public class QuestionService {
                 .toList();
 
         // 🔹 Build DTO trả ra
-        return new QuestionAdminResponse(
-                question.getQuestionId(),
-                examTypeId,
-                question.getExamPartId(),
-                question.getQuestionText(),
-                question.getQuestionType(),
-                question.getExplanation(),
-                null, // testPartId
-                answers,
-                question.getClassId(),
-                question.getIsBank()
-        );
+        return QuestionAdminResponse.builder()
+                .questionId(question.getQuestionId())
+                .examPartId(question.getExamPartId())
+                .questionText(question.getQuestionText())
+                .questionType(question.getQuestionType())
+                .explanation(question.getExplanation())
+                .examTypeId(examTypeId)
+                .classId(question.getClassId())
+                .isBank(question.getIsBank())
+                .answers(answers)
+                .build();
 
     }
 
