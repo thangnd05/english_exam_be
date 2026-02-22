@@ -33,20 +33,12 @@ public class TestService {
     private final RoleRepository  roleRepository;
     private final UserRepository userRepository;
     private final ExamPartRepository  examPartRepository;
-    private final CloudinaryService  cloudinaryService;
-    private final ExamTypeRepository examTypeRepository;
     private final PassageRepository  passageRepository;
     private final UserTestRepository userTestRepository;
-    private final AnswerRepository answerRepository;
     private final AuthUtils authUtils;
     private final UserTestService userTestService;
     private final ClassRepository classRepository;
     private final ClassMemberRepository classMemberRepository;
-    private final ChapterRepository chapterRepository;
-    private final QuestionService questionService;
-
-
-
 
 
     private LocalDateTime parseDate(String input) {
@@ -78,11 +70,14 @@ public class TestService {
                         userId
                 );
 
-        int maxAttempts =
-                test.getMaxAttempts() == null ? 1 : test.getMaxAttempts();
+        Integer maxAttempts = test.getMaxAttempts();
+        Integer remainingAttempts = null;
+        boolean canDoTest = true;
 
-        int remainingAttempts =
-                (int) Math.max(0, maxAttempts - attemptsUsed);
+        if (maxAttempts != null) {
+            remainingAttempts = (int) Math.max(0, maxAttempts - attemptsUsed);
+            canDoTest = remainingAttempts > 0;
+        }
 
         return TestResponse.builder()
                 .testId(test.getTestId())
@@ -96,10 +91,10 @@ public class TestService {
                 .availableFrom(test.getAvailableFrom())
                 .availableTo(test.getAvailableTo())
                 .status(test.calculateStatus().name())
-                .maxAttempts(maxAttempts)
+                .maxAttempts(maxAttempts)                // giữ nguyên null
                 .attemptsUsed((int) attemptsUsed)
-                .remainingAttempts(remainingAttempts)
-                .canDoTest(remainingAttempts > 0)
+                .remainingAttempts(remainingAttempts)   // null nếu không giới hạn
+                .canDoTest(canDoTest)                   // luôn true nếu null
                 .parts(null)
                 .build();
     }
@@ -140,14 +135,24 @@ public class TestService {
                 .findTopByUserIdAndTestIdOrderByStartedAtDesc(currentUserId, testId)
                 .orElse(null);
 
-        if (latest != null && latest.getStatus() == UserTest.Status.IN_PROGRESS) {
-            LocalDateTime now = LocalDateTime.now();
-            LocalDateTime endTime = latest.getStartedAt().plusMinutes(test.getDurationMinutes());
+        Integer duration = test.getDurationMinutes();
 
-            if (test.getAvailableTo() != null && test.getAvailableTo().isBefore(endTime)) {
+// Chỉ xử lý auto submit khi có giới hạn thời gian hợp lệ
+        if (latest != null
+                && latest.getStatus() == UserTest.Status.IN_PROGRESS
+                && duration != null
+                && duration > 0) {
+
+            LocalDateTime now = LocalDateTime.now();
+            LocalDateTime endTime = latest.getStartedAt().plusMinutes(duration);
+
+            // Nếu có availableTo và nó sớm hơn endTime → dùng availableTo
+            if (test.getAvailableTo() != null
+                    && test.getAvailableTo().isBefore(endTime)) {
                 endTime = test.getAvailableTo();
             }
 
+            // Nếu đã quá hạn → auto submit
             if (!now.isBefore(endTime)) {
                 try {
                     userTestService.submitTest(latest.getUserTestId());
@@ -283,8 +288,6 @@ public class TestService {
 
 
 
-
-
     // Hàm bổ trợ để build response trống
     private TestResponse buildEmptyTestResponse(Test test, Integer maxAttempts, int attemptsUsed, Integer remaining) {
         return new TestResponse(
@@ -294,11 +297,6 @@ public class TestService {
                 maxAttempts, attemptsUsed, remaining, true, Collections.emptyList()
         );
     }
-
-
-
-
-
 
 
     public TestAdminResponse getTestFullByIdAdmin(Long testId) {
@@ -494,8 +492,6 @@ public class TestService {
                 .parts(partResponses)
                 .build();
     }
-
-
 
     public Map<String, Object> canStartTest(Long userId, Test test) {
         LocalDateTime now = LocalDateTime.now();
