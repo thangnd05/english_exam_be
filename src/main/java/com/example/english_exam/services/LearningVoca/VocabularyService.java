@@ -1,13 +1,10 @@
 package com.example.english_exam.services.LearningVoca;
 
-
 import com.example.english_exam.dto.request.VocabularyRequest;
 import com.example.english_exam.dto.response.VocabularyResponse;
 import com.example.english_exam.models.DictionaryResult;
-import com.example.english_exam.models.User;
 import com.example.english_exam.models.Vocabulary;
 import com.example.english_exam.models.VocabularyAlbum;
-import com.example.english_exam.repositories.UserRepository;
 import com.example.english_exam.repositories.VocabularyAlbumRepository;
 import com.example.english_exam.repositories.VocabularyRepository;
 import com.example.english_exam.services.ApiExtend.DictionaryApiService;
@@ -19,40 +16,52 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.Optional;
 
 @Service
 @AllArgsConstructor
 public class VocabularyService {
+
     private final VocabularyRepository repository;
     private final VocabularyAlbumRepository albumRepository;
     private final DictionaryApiService dictionaryApiService;
     private final TextToSpeechService textToSpeechService;
-    private final AuthUtils  authUtils;
-    private final UserRepository userRepository;
+    private final AuthUtils authUtils;
 
-
-
-    public List<Vocabulary> findAll() {
-        return repository.findAll();
+    // =========================
+    // GET ALL
+    // =========================
+    public List<VocabularyResponse> findAll() {
+        return repository.findAll()
+                .stream()
+                .map(this::toResponse)
+                .toList();
     }
 
-    public Optional<Vocabulary> findById(Long id) {
-        return repository.findById(id);
+    // =========================
+    // GET BY ID
+    // =========================
+    public VocabularyResponse findById(Long id) {
+        Vocabulary vocab = repository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Vocabulary không tồn tại"));
+
+        return toResponse(vocab);
     }
 
-    public Vocabulary save(Vocabulary vocab) {
-        return repository.save(vocab);
+    // =========================
+    // DELETE
+    // =========================
+    public void delete(Long id) {
+        Vocabulary vocab = repository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Vocabulary không tồn tại"));
+
+        repository.delete(vocab);
     }
 
-    public boolean delete(Long id) {
-        return repository.findById(id).map(v -> {
-            repository.delete(v);
-            return true;
-        }).orElse(false);
-    }
-
+    // =========================
+    // CREATE
+    // =========================
     public VocabularyResponse createVocabulary(VocabularyRequest request) {
+
         VocabularyAlbum album;
 
         if (request.getAlbumId() != null) {
@@ -74,58 +83,102 @@ public class VocabularyService {
         vocab.setExample(request.getExample());
         vocab.setAlbumId(album.getAlbumId());
 
-        // 👇 gọi API Dictionary
         DictionaryResult result = dictionaryApiService.fetchWordInfo(request.getWord());
+
         if (result != null) {
             vocab.setPhonetic(result.getPhonetic());
 
             if (result.getAudioUrl() != null && !result.getAudioUrl().isEmpty()) {
                 vocab.setVoiceUrl(result.getAudioUrl());
             } else {
-                // fallback sang Google TTS
-                String ttsUrl = textToSpeechService.generateAudio(request.getWord());
-                vocab.setVoiceUrl(ttsUrl);
+                vocab.setVoiceUrl(textToSpeechService.generateAudio(request.getWord()));
             }
         } else {
-            // fallback cả phonetic và audio nếu Dictionary API fail
-            String ttsUrl = textToSpeechService.generateAudio(request.getWord());
-            vocab.setVoiceUrl(ttsUrl);
+            vocab.setVoiceUrl(textToSpeechService.generateAudio(request.getWord()));
         }
 
         vocab = repository.save(vocab);
 
+        return toResponse(vocab);
+    }
+
+    // =========================
+    // UPDATE
+    // =========================
+    public VocabularyResponse updateVocabulary(Long vocabId, VocabularyRequest request) {
+
+        Vocabulary vocab = repository.findById(vocabId)
+                .orElseThrow(() -> new RuntimeException("Vocabulary không tồn tại"));
+
+        vocab.setWord(request.getWord());
+        vocab.setMeaning(request.getMeaning());
+        vocab.setExample(request.getExample());
+
+        if (request.getAlbumId() != null) {
+            vocab.setAlbumId(request.getAlbumId());
+        }
+
+        DictionaryResult result = dictionaryApiService.fetchWordInfo(request.getWord());
+
+        if (result != null) {
+            vocab.setPhonetic(result.getPhonetic());
+
+            if (result.getAudioUrl() != null && !result.getAudioUrl().isEmpty()) {
+                vocab.setVoiceUrl(result.getAudioUrl());
+            } else {
+                vocab.setVoiceUrl(textToSpeechService.generateAudio(request.getWord()));
+            }
+
+        } else {
+            vocab.setVoiceUrl(textToSpeechService.generateAudio(request.getWord()));
+        }
+
+        vocab = repository.save(vocab);
+
+        return toResponse(vocab);
+    }
+
+    // =========================
+    // FIND BY ALBUM
+    // =========================
+    public List<VocabularyResponse> findAllByAlbumId(Long albumId, HttpServletRequest request) {
+
+        Long currentUserId = authUtils.getUserId(request);
+
+        VocabularyAlbum album = albumRepository.findById(albumId)
+                .orElseThrow(() -> new RuntimeException("Album không tồn tại"));
+
+        if (!album.getUserId().equals(currentUserId)) {
+            throw new AccessDeniedException("Bạn không có quyền truy cập album này!");
+        }
+
+        return repository.findByAlbumId(albumId)
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    // =========================
+    // MAPPER ENTITY -> DTO
+    // =========================
+    private VocabularyResponse toResponse(Vocabulary vocab) {
+
         VocabularyResponse response = new VocabularyResponse();
+
         response.setVocabId(vocab.getVocabId());
         response.setWord(vocab.getWord());
         response.setPhonetic(vocab.getPhonetic());
         response.setMeaning(vocab.getMeaning());
         response.setExample(vocab.getExample());
-        response.setAlbumId(album.getAlbumId());
-        response.setAlbumName(album.getName());
-        response.setAlbumDesc(album.getDescription());
+        response.setAlbumId(vocab.getAlbumId());
         response.setVoiceUrl(vocab.getVoiceUrl());
         response.setCreatedAt(vocab.getCreatedAt());
 
+        albumRepository.findById(vocab.getAlbumId()).ifPresent(album -> {
+            response.setAlbumName(album.getName());
+            response.setAlbumDesc(album.getDescription());
+        });
+
         return response;
     }
-
-    public List<Vocabulary> findAllByAlbumId(Long albumId, HttpServletRequest request) {
-        // ✅ Lấy user hiện tại từ token
-        Long currentUserId = authUtils.getUserId(request);
-
-        // ✅ Kiểm tra album có tồn tại không
-        VocabularyAlbum album = albumRepository.findById(albumId)
-                .orElseThrow(() -> new RuntimeException("Album không tồn tại"));
-
-
-
-        // ✅ Chỉ người tạo album mới xem được
-        if (!album.getUserId().equals(currentUserId)) {
-            throw new AccessDeniedException("Bạn không có quyền truy cập album này!");
-        }
-
-        // ✅ Trả danh sách từ vựng trong album
-        return repository.findByAlbumId(albumId);
-    }
 }
-

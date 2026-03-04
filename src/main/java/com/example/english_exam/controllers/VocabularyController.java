@@ -1,7 +1,6 @@
 package com.example.english_exam.controllers;
 
 import com.example.english_exam.dto.request.VocabularyRequest;
-import com.example.english_exam.dto.request.VocabularyUpdateRequest;
 import com.example.english_exam.dto.response.VocabularyResponse;
 import com.example.english_exam.models.Vocabulary;
 import com.example.english_exam.repositories.VocabularyAlbumRepository;
@@ -23,18 +22,12 @@ public class VocabularyController {
 
     @GetMapping
     public ResponseEntity<List<VocabularyResponse>> getAll() {
-        List<VocabularyResponse> responses = service.findAll().stream()
-                .map(this::toResponse)
-                .collect(Collectors.toList());
-        return ResponseEntity.ok(responses);
+        return ResponseEntity.ok(service.findAll());
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<VocabularyResponse> getById(@PathVariable Long id) {
-        return service.findById(id)
-                .map(this::toResponse)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+        return ResponseEntity.ok(service.findById(id));
     }
 
     @PostMapping
@@ -45,27 +38,20 @@ public class VocabularyController {
     @PutMapping("/{id}")
     public ResponseEntity<VocabularyResponse> update(
             @PathVariable Long id,
-            @RequestBody VocabularyUpdateRequest request
+            @RequestBody VocabularyRequest request
     ) {
-        return service.findById(id)
-                .map(vocab -> {
-                    vocab.setWord(request.getWord());
-                    vocab.setMeaning(request.getMeaning());
-                    vocab.setExample(request.getExample());
-                    if (request.getAlbumId() != null) {
-                        vocab.setAlbumId(request.getAlbumId());
-                    }
-                    Vocabulary saved = service.save(vocab);
-                    return ResponseEntity.ok(toResponse(saved));
-                })
-                .orElse(ResponseEntity.notFound().build());
+        try {
+            VocabularyResponse response = service.updateVocabulary(id, request);
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            return ResponseEntity.notFound().build();
+        }
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<?> delete(@PathVariable Long id) {
-        return service.delete(id)
-                ? ResponseEntity.noContent().build()
-                : ResponseEntity.notFound().build();
+    public ResponseEntity<Void> delete(@PathVariable Long id) {
+        service.delete(id);
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/album/{albumId}")
@@ -73,26 +59,6 @@ public class VocabularyController {
             @PathVariable Long albumId,
             HttpServletRequest request
     ) {
-        List<VocabularyResponse> responses = service.findAllByAlbumId(albumId, request).stream()
-                .map(this::toResponse)
-                .collect(Collectors.toList());
-        return ResponseEntity.ok(responses);
-    }
-
-    private VocabularyResponse toResponse(Vocabulary vocab) {
-        VocabularyResponse response = new VocabularyResponse();
-        response.setVocabId(vocab.getVocabId());
-        response.setWord(vocab.getWord());
-        response.setPhonetic(vocab.getPhonetic());
-        response.setMeaning(vocab.getMeaning());
-        response.setExample(vocab.getExample());
-        response.setAlbumId(vocab.getAlbumId());
-        response.setVoiceUrl(vocab.getVoiceUrl());
-        response.setCreatedAt(vocab.getCreatedAt());
-        albumRepository.findById(vocab.getAlbumId()).ifPresent(album -> {
-            response.setAlbumName(album.getName());
-            response.setAlbumDesc(album.getDescription());
-        });
-        return response;
+        return ResponseEntity.ok(service.findAllByAlbumId(albumId, request));
     }
 }
