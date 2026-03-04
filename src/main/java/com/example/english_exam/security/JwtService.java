@@ -86,8 +86,10 @@ public class JwtService {
                     .build()
                     .parseClaimsJws(token)
                     .getBody();
+        } catch (ExpiredJwtException e) {
+            throw new RuntimeException("Token đã hết hạn");
         } catch (JwtException e) {
-            return null; // Token không hợp lệ
+            throw new RuntimeException("Token không hợp lệ");
         }
     }
 
