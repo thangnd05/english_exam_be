@@ -5,8 +5,7 @@ import lombok.*;
 import java.time.LocalDateTime;
 
 @AllArgsConstructor
-@Getter
-@Setter
+@Data
 public class ChapterResponse {
 
     private Long chapterId;

@@ -50,12 +50,12 @@ public class ChapterController {
     }
 
     @DeleteMapping("/{chapterId}")
-    public ResponseEntity<?> delete(
+    public ResponseEntity<Void> delete(
             HttpServletRequest requestHttp,
             @PathVariable Long chapterId
     ) {
         chapterService.delete(requestHttp, chapterId);
-        return ResponseEntity.ok("Deleted successfully");
+        return ResponseEntity.noContent().build();
     }
 
 }
