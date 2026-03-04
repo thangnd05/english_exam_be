@@ -4,9 +4,8 @@ import com.example.english_exam.dto.response.ResultSummaryDto;
 import com.example.english_exam.models.Answer;
 import com.example.english_exam.models.Question;
 import com.example.english_exam.models.UserAnswer;
-import com.example.english_exam.repositories.AnswerRepository;
-import com.example.english_exam.repositories.QuestionRepository;
-import com.example.english_exam.repositories.UserAnswerRepository;
+import com.example.english_exam.models.UserTest;
+import com.example.english_exam.repositories.*;
 import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -19,6 +18,7 @@ public class UserAnswerService {
     private final UserAnswerRepository userAnswerRepository;
     private final QuestionRepository questionRepository;
     private final AnswerRepository answerRepository;
+    private final UserTestRepository userTestRepository ;
 
 
 
@@ -55,7 +55,7 @@ public class UserAnswerService {
     public ResultSummaryDto getResultSummary(Long userTestId) {
         List<UserAnswer> userAnswers = userAnswerRepository.findByUserTestId(userTestId);
         if (userAnswers.isEmpty()) {
-            return new ResultSummaryDto(0, 0, 0);
+            return new ResultSummaryDto(0, 0, 0,0);
         }
 
         Set<Long> questionIds = userAnswers.stream()
@@ -93,7 +93,8 @@ public class UserAnswerService {
 
         long totalQuestions = userAnswers.size();
         long wrongCount = totalQuestions - correctCount;
-
-        return new ResultSummaryDto(correctCount, wrongCount, totalQuestions);
+        UserTest userTest = userTestRepository.findById(userTestId)
+                .orElseThrow(() -> new RuntimeException("UserTest not found"));
+        return new ResultSummaryDto(correctCount, wrongCount, totalQuestions,userTest.getTotalScore());
     }
 }
