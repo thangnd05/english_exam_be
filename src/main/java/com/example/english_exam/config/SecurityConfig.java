@@ -80,7 +80,10 @@ public class SecurityConfig {
                                 "/api/exam-types/**",
                                 "/api/tests/**",
                                 "/login/oauth2/**",
-                                "/api/evaluations"
+                                "/api/evaluations",
+                                "/v3/api-docs/**",
+                                "/swagger-ui/**",
+                                "/swagger-ui.html"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )
