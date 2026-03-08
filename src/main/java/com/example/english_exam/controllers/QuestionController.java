@@ -1,6 +1,7 @@
 package com.example.english_exam.controllers;
 
 import com.example.english_exam.dto.request.*;
+import com.example.english_exam.dto.response.admin.AnswerAdminResponse;
 import com.example.english_exam.dto.response.admin.QuestionAdminResponse;
 import com.example.english_exam.dto.response.user.QuestionResponse;
 import com.example.english_exam.models.Question;
@@ -71,19 +72,6 @@ public class QuestionController {
 
     // =================== CREATE ===================
     // Tạo câu hỏi thông thường vào kho (không passage). Gắn đề qua API riêng.
-
-    @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<QuestionAdminResponse> createQuestionToBank(
-            @RequestBody QuestionCreateRequest request,
-            HttpServletRequest httpRequest
-    ) {
-        try {
-            QuestionAdminResponse response = questionService.createQuestionToBank(request, httpRequest);
-            return ResponseEntity.status(HttpStatus.CREATED).body(response);
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().build();
-        }
-    }
 
 
     @PostMapping(
@@ -165,6 +153,50 @@ public class QuestionController {
                 questionService.createQuestionAndAttachToTest(request, httpRequest, files);
 
         return ResponseEntity.ok(result);
+    }
+
+    // =================== UPDATE ===================
+
+    /** Cập nhật nội dung câu hỏi (và passage). Không đụng tới đáp án. Body: QuestionCreateRequest (patch). */
+    @PutMapping(value = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<QuestionAdminResponse> updateQuestion(
+            @PathVariable Long id,
+            @RequestBody QuestionCreateRequest request,
+            HttpServletRequest httpRequest
+    ) {
+        try {
+            QuestionAdminResponse response = questionService.updateQuestion(id, request, httpRequest);
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            if (e.getMessage() != null && (e.getMessage().contains("không tồn tại") || e.getMessage().contains("not found"))) {
+                return ResponseEntity.notFound().build();
+            }
+            if (e.getMessage() != null && e.getMessage().contains("Chỉ người tạo")) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    /** Cập nhật đáp án của câu hỏi. Body: [ AnswerRequest, ... ] — có answerId = sửa, không có = thêm; không gửi = xóa. */
+    @PutMapping(value = "/{id}/answers", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<List<AnswerAdminResponse>> updateQuestionAnswers(
+            @PathVariable Long id,
+            @RequestBody List<AnswerRequest> answers,
+            HttpServletRequest httpRequest
+    ) {
+        try {
+            List<AnswerAdminResponse> response = questionService.updateQuestionAnswers(id, answers, httpRequest);
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            if (e.getMessage() != null && (e.getMessage().contains("không tồn tại") || e.getMessage().contains("not found"))) {
+                return ResponseEntity.notFound().build();
+            }
+            if (e.getMessage() != null && e.getMessage().contains("Chỉ người tạo")) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+            return ResponseEntity.badRequest().build();
+        }
     }
 
     // =================== DELETE ===================

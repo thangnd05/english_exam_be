@@ -144,42 +144,6 @@ public class QuestionService {
         return questionRepository.countByExamPartIdAndCreatedByAndClassIdIsNullAndChapterIdIsNull(examPartId, currentUserId);
     }
 
-    /**
-     * Tạo 1 câu hỏi vào kho. Có thể kèm passage (tùy chọn); không có passage thì câu hỏi độc lập.
-     * Gắn đề qua API riêng (AddQuestionsToTest). Tạo nhiều câu không passage → dùng createBulkQuestionsToBankNoPassage.
-     */
-    @Transactional
-    public QuestionAdminResponse createQuestionToBank(QuestionCreateRequest request, HttpServletRequest httpRequest) {
-        Long currentUserId = authUtils.getUserId(httpRequest);
-        if (currentUserId == null) {
-            throw new RuntimeException("Không xác định được người dùng từ token.");
-        }
-
-        Long passageId = null;
-        Passage savedPassage = null;
-        if (request.getPassage() != null && hasPassageContent(request.getPassage())) {
-            Passage passage = new Passage();
-            passage.setContent(request.getPassage().getContent() != null ? request.getPassage().getContent() : "");
-            passage.setMediaUrl(request.getPassage().getMediaUrl());
-            passage.setPassageType(request.getPassage().getPassageType());
-            savedPassage = passageRepository.save(passage);
-            passageId = savedPassage.getPassageId();
-        }
-
-        Question question = new Question();
-        question.setExamPartId(request.getExamPartId());
-        question.setPassageId(passageId);
-        question.setQuestionText(request.getQuestionText());
-        question.setQuestionType(request.getQuestionType());
-        question.setCreatedBy(currentUserId);
-        if (request.getClassId() != null) question.setClassId(request.getClassId());
-        if (request.getChapterId() != null) question.setChapterId(request.getChapterId());
-        question.setIsBank(Boolean.TRUE);
-        question = questionRepository.save(question);
-
-        List<Answer> savedAnswers = saveAnswersForQuestion(question.getQuestionId(), request.getAnswers(), request.getQuestionType());
-        return buildQuestionAdminResponse(question, savedPassage, savedAnswers, null);
-    }
 
     /**
      * Tạo nhiều câu hỏi cùng 1 passage vào kho (BẮT BUỘC lưu kho, BẮT BUỘC có passage).
@@ -496,6 +460,70 @@ public class QuestionService {
         return answerRepository.saveAll(list);
     }
 
+    /**
+     * Sửa / merge đáp án khi update câu hỏi: có answerId thì cập nhật, không có thì thêm mới;
+     * đáp án hiện có mà không nằm trong request thì xóa.
+     */
+    private List<Answer> updateOrMergeAnswersForQuestion(
+            Long questionId,
+            List<AnswerRequest> answers,
+            Question.QuestionType questionType
+    ) {
+        if (answers == null || answers.isEmpty()) {
+            return answerRepository.findByQuestionId(questionId);
+        }
+
+        Set<Long> keptAnswerIds = new HashSet<>();
+
+        if (questionType == Question.QuestionType.FILL_BLANK) {
+            AnswerRequest ar = answers.get(0);
+            if (ar.getAnswerId() != null) {
+                answerRepository.findByQuestionIdAndAnswerId(questionId, ar.getAnswerId()).ifPresent(a -> {
+                    a.setAnswerText(ar.getAnswerText() != null ? ar.getAnswerText() : "");
+                    a.setAnswerLabel(ar.getAnswerLabel() != null ? ar.getAnswerLabel() : "");
+                    a.setIsCorrect(true);
+                    answerRepository.save(a);
+                    keptAnswerIds.add(a.getAnswerId());
+                });
+            } else {
+                Answer a = new Answer();
+                a.setQuestionId(questionId);
+                a.setAnswerText(ar.getAnswerText() != null ? ar.getAnswerText() : "");
+                a.setAnswerLabel(ar.getAnswerLabel() != null ? ar.getAnswerLabel() : "");
+                a.setIsCorrect(true);
+                a = answerRepository.save(a);
+                keptAnswerIds.add(a.getAnswerId());
+            }
+        } else {
+            for (AnswerRequest ar : answers) {
+                if (ar.getAnswerId() != null) {
+                    answerRepository.findByQuestionIdAndAnswerId(questionId, ar.getAnswerId()).ifPresent(a -> {
+                        a.setAnswerText(ar.getAnswerText() != null ? ar.getAnswerText() : "");
+                        a.setAnswerLabel(ar.getAnswerLabel() != null ? ar.getAnswerLabel() : "");
+                        a.setIsCorrect(Boolean.TRUE.equals(ar.getIsCorrect()));
+                        answerRepository.save(a);
+                        keptAnswerIds.add(a.getAnswerId());
+                    });
+                } else {
+                    Answer a = new Answer();
+                    a.setQuestionId(questionId);
+                    a.setAnswerText(ar.getAnswerText() != null ? ar.getAnswerText() : "");
+                    a.setAnswerLabel(ar.getAnswerLabel() != null ? ar.getAnswerLabel() : "");
+                    a.setIsCorrect(Boolean.TRUE.equals(ar.getIsCorrect()));
+                    a = answerRepository.save(a);
+                    keptAnswerIds.add(a.getAnswerId());
+                }
+            }
+        }
+
+        List<Answer> existing = answerRepository.findByQuestionId(questionId);
+        for (Answer a : existing) {
+            if (!keptAnswerIds.contains(a.getAnswerId())) {
+                answerRepository.delete(a);
+            }
+        }
+        return answerRepository.findByQuestionId(questionId);
+    }
 
     private QuestionAdminResponse buildQuestionAdminResponse(Question question, Passage passage,
                                                              List<Answer> answerEntities, Long testPartId) {
@@ -570,7 +598,92 @@ public class QuestionService {
                 .build();
     }
 
+    /**
+     * Cập nhật nội dung câu hỏi (và passage). Không đụng tới đáp án.
+     * Dùng QuestionCreateRequest: chỉ ghi đè field khác null (patch). Chỉ user tạo câu được sửa.
+     */
+    @Transactional
+    public QuestionAdminResponse updateQuestion(Long questionId, QuestionCreateRequest request, HttpServletRequest httpRequest) {
+        Long currentUserId = authUtils.getUserId(httpRequest);
+        if (currentUserId == null) {
+            throw new RuntimeException("Không xác định được người dùng từ token.");
+        }
 
+        Question question = questionRepository.findById(questionId)
+                .orElseThrow(() -> new RuntimeException("Câu hỏi không tồn tại."));
+        if (!currentUserId.equals(question.getCreatedBy())) {
+            throw new RuntimeException("Chỉ người tạo câu hỏi mới được sửa.");
+        }
+
+        if (request.getExamPartId() != null) question.setExamPartId(request.getExamPartId());
+        if (request.getClassId() != null) question.setClassId(request.getClassId());
+        if (request.getChapterId() != null) question.setChapterId(request.getChapterId());
+        if (request.getQuestionText() != null) question.setQuestionText(request.getQuestionText());
+        if (request.getQuestionType() != null) question.setQuestionType(request.getQuestionType());
+        if (request.getIsBank() != null) question.setIsBank(request.getIsBank());
+
+        Passage passage = null;
+        if (request.getPassage() != null && hasPassageContent(request.getPassage())) {
+            if (question.getPassageId() != null) {
+                passage = passageRepository.findById(question.getPassageId()).orElse(null);
+                if (passage != null) {
+                    passage.setContent(request.getPassage().getContent() != null ? request.getPassage().getContent() : "");
+                    passage.setPassageType(request.getPassage().getPassageType());
+                    if (request.getPassage().getMediaUrl() != null) {
+                        passage.setMediaUrl(request.getPassage().getMediaUrl());
+                    }
+                    passage = passageRepository.save(passage);
+                }
+            }
+            if (passage == null) {
+                passage = new Passage();
+                passage.setContent(request.getPassage().getContent() != null ? request.getPassage().getContent() : "");
+                passage.setPassageType(request.getPassage().getPassageType());
+                passage.setMediaUrl(request.getPassage().getMediaUrl());
+                passage = passageRepository.save(passage);
+                question.setPassageId(passage.getPassageId());
+            }
+        } else {
+            if (question.getPassageId() != null) {
+                passage = passageRepository.findById(question.getPassageId()).orElse(null);
+            }
+        }
+
+        question = questionRepository.save(question);
+        List<Answer> answers = answerRepository.findByQuestionId(questionId);
+        if (passage == null && question.getPassageId() != null) {
+            passage = passageRepository.findById(question.getPassageId()).orElse(null);
+        }
+        return buildQuestionAdminResponse(question, passage, answers, null);
+    }
+
+    /**
+     * Cập nhật đáp án của một câu hỏi. Có answerId = sửa, không có = thêm; không gửi trong list = xóa.
+     * Chỉ user tạo câu được sửa.
+     */
+    @Transactional
+    public List<AnswerAdminResponse> updateQuestionAnswers(Long questionId, List<AnswerRequest> answers, HttpServletRequest httpRequest) {
+        Long currentUserId = authUtils.getUserId(httpRequest);
+        if (currentUserId == null) {
+            throw new RuntimeException("Không xác định được người dùng từ token.");
+        }
+
+        Question question = questionRepository.findById(questionId)
+                .orElseThrow(() -> new RuntimeException("Câu hỏi không tồn tại."));
+        if (!currentUserId.equals(question.getCreatedBy())) {
+            throw new RuntimeException("Chỉ người tạo câu hỏi mới được sửa đáp án.");
+        }
+
+        List<Answer> saved = updateOrMergeAnswersForQuestion(questionId, answers != null ? answers : List.of(), question.getQuestionType());
+        return saved.stream()
+                .map(a -> AnswerAdminResponse.builder()
+                        .answerId(a.getAnswerId())
+                        .answerText(a.getAnswerText())
+                        .answerLabel(a.getAnswerLabel())
+                        .isCorrect(a.getIsCorrect())
+                        .build())
+                .toList();
+    }
 
     @Transactional
     public List<QuestionAdminResponse> createBulkGroups(

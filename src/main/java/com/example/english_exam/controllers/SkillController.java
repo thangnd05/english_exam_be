@@ -1,8 +1,10 @@
 package com.example.english_exam.controllers;
 
-import com.example.english_exam.models.Skill;
+import com.example.english_exam.dto.request.SkillRequest;
+import com.example.english_exam.dto.response.SkillResponse;
 import com.example.english_exam.services.ExamAndTest.SkillService;
 import lombok.AllArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -16,35 +18,49 @@ public class SkillController {
     private final SkillService skillService;
 
     @GetMapping
-    public ResponseEntity<List<Skill>> getAll() {
+    public ResponseEntity<List<SkillResponse>> getAll() {
         return ResponseEntity.ok(skillService.findAll());
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Skill> getById(@PathVariable Long id) {
-        return skillService.findById(id)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+    public ResponseEntity<SkillResponse> getById(@PathVariable Long id) {
+        try {
+            return ResponseEntity.ok(skillService.findById(id));
+        } catch (RuntimeException e) {
+            if (e.getMessage() != null && e.getMessage().contains("không tồn tại")) {
+                return ResponseEntity.notFound().build();
+            }
+            throw e;
+        }
     }
 
     @PostMapping
-    public ResponseEntity<Skill> create(@RequestBody Skill skill) {
-        return ResponseEntity.ok(skillService.save(skill));
+    public ResponseEntity<SkillResponse> create(@RequestBody SkillRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(skillService.create(request));
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Skill> update(@PathVariable Long id, @RequestBody Skill skill) {
-        skill.setSkillId(id);
-        return ResponseEntity.ok(skillService.save(skill));
+    public ResponseEntity<SkillResponse> update(@PathVariable Long id, @RequestBody SkillRequest request) {
+        try {
+            return ResponseEntity.ok(skillService.update(id, request));
+        } catch (RuntimeException e) {
+            if (e.getMessage() != null && e.getMessage().contains("không tồn tại")) {
+                return ResponseEntity.notFound().build();
+            }
+            return ResponseEntity.badRequest().build();
+        }
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<?> delete(@PathVariable Long id) {
-        return skillService.findById(id)
-                .map(existing -> {
-                    skillService.delete(id);
-                    return ResponseEntity.noContent().build();
-                })
-                .orElse(ResponseEntity.notFound().build());
+    public ResponseEntity<Void> delete(@PathVariable Long id) {
+        try {
+            skillService.delete(id);
+            return ResponseEntity.noContent().build();
+        } catch (RuntimeException e) {
+            if (e.getMessage() != null && e.getMessage().contains("không tồn tại")) {
+                return ResponseEntity.notFound().build();
+            }
+            return ResponseEntity.badRequest().build();
+        }
     }
 }

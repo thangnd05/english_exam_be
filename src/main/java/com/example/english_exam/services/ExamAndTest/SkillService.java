@@ -1,35 +1,60 @@
-// SkillService.java
 package com.example.english_exam.services.ExamAndTest;
 
+import com.example.english_exam.dto.request.SkillRequest;
+import com.example.english_exam.dto.response.SkillResponse;
 import com.example.english_exam.models.Skill;
 import com.example.english_exam.repositories.SkillRepository;
+import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.Optional;
 
 @Service
+@AllArgsConstructor
 public class SkillService {
 
     private final SkillRepository skillRepository;
 
-    public SkillService(SkillRepository skillRepository) {
-        this.skillRepository = skillRepository;
+    public List<SkillResponse> findAll() {
+        return skillRepository.findAll().stream()
+                .map(this::toResponse)
+                .toList();
     }
 
-    public List<Skill> findAll() {
-        return skillRepository.findAll();
+    public SkillResponse findById(Long id) {
+        Skill skill = skillRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Skill không tồn tại"));
+        return toResponse(skill);
     }
 
-    public Optional<Skill> findById(Long id) {
-        return skillRepository.findById(id);
+    public SkillResponse create(SkillRequest request) {
+        Skill skill = new Skill();
+        skill.setName(request.getName());
+        skill.setDescription(request.getDescription());
+        skill = skillRepository.save(skill);
+        return toResponse(skill);
     }
 
-    public Skill save(Skill skill) {
-        return skillRepository.save(skill);
+    public SkillResponse update(Long id, SkillRequest request) {
+        Skill skill = skillRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Skill không tồn tại"));
+        if (request.getName() != null) skill.setName(request.getName());
+        if (request.getDescription() != null) skill.setDescription(request.getDescription());
+        skill = skillRepository.save(skill);
+        return toResponse(skill);
     }
 
     public void delete(Long id) {
-        skillRepository.deleteById(id);
+        Skill skill = skillRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Skill không tồn tại"));
+        skillRepository.delete(skill);
+    }
+
+    private SkillResponse toResponse(Skill skill) {
+        SkillResponse response = new SkillResponse();
+        response.setSkillId(skill.getSkillId());
+        response.setName(skill.getName());
+        response.setDescription(skill.getDescription());
+        return response;
     }
 }
