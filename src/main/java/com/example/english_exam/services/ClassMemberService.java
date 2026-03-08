@@ -1,5 +1,6 @@
 package com.example.english_exam.services;
 
+import com.example.english_exam.dto.response.ClassMemberResponse;
 import com.example.english_exam.dto.response.ClassStudentResponse;
 import com.example.english_exam.models.ClassEntity;
 import com.example.english_exam.models.ClassMember;
@@ -8,7 +9,6 @@ import com.example.english_exam.models.User;
 import com.example.english_exam.repositories.ClassMemberRepository;
 import com.example.english_exam.repositories.ClassRepository;
 import com.example.english_exam.repositories.UserRepository;
-import com.example.english_exam.security.AuthService;
 import com.example.english_exam.util.AuthUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -27,9 +27,8 @@ public class ClassMemberService {
     private final ClassRepository classRepository;
     private final UserRepository userRepository;
 
-    // 🟢 Học sinh gửi yêu cầu tham gia lớp (status = PENDING)
     @Transactional
-    public ClassMember joinClass(Long classId, HttpServletRequest request) {
+    public ClassMemberResponse joinClass(Long classId, HttpServletRequest request) {
         Long currentUserId = authUtils.getUserId(request);
 
         if (classMemberRepository.existsByClassIdAndUserId(classId, currentUserId)) {
@@ -43,7 +42,8 @@ public class ClassMemberService {
                 .joinedAt(LocalDateTime.now())
                 .build();
 
-        return classMemberRepository.save(member);
+        member = classMemberRepository.save(member);
+        return toResponse(member);
     }
 
     // 🟢 Duyệt 1 học sinh (teacher duyệt)
@@ -87,14 +87,26 @@ public class ClassMemberService {
     }
 
 
-    // 🟢 Lấy tất cả học sinh trong lớp
-    public List<ClassMember> getAllMembers(Long classId) {
-        return classMemberRepository.findByClassId(classId);
+    public List<ClassMemberResponse> getAllMembers(Long classId) {
+        return classMemberRepository.findByClassId(classId).stream()
+                .map(this::toResponse)
+                .toList();
     }
 
-    // 🟢 Lấy danh sách học sinh đang chờ duyệt
-    public List<ClassMember> getPendingMembers(Long classId) {
-        return classMemberRepository.findByClassIdAndStatus(classId, MemberStatus.PENDING);
+    public List<ClassMemberResponse> getPendingMembers(Long classId) {
+        return classMemberRepository.findByClassIdAndStatus(classId, MemberStatus.PENDING).stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    private ClassMemberResponse toResponse(ClassMember m) {
+        ClassMemberResponse res = new ClassMemberResponse();
+        res.setId(m.getId());
+        res.setClassId(m.getClassId());
+        res.setUserId(m.getUserId());
+        res.setStatus(m.getStatus());
+        res.setJoinedAt(m.getJoinedAt());
+        return res;
     }
 
     // 🟢 Rút khỏi lớp (student tự rời lớp)
