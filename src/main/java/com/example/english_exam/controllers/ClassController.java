@@ -1,13 +1,15 @@
 package com.example.english_exam.controllers;
 
+import com.example.english_exam.dto.request.ClassRequest;
+import com.example.english_exam.dto.response.ClassResponse;
 import com.example.english_exam.dto.response.ClassSimpleResponse;
 import com.example.english_exam.dto.response.user.TestResponse;
-import com.example.english_exam.models.ClassEntity;
-import com.example.english_exam.models.Test;
 import com.example.english_exam.services.ClassService;
 import com.example.english_exam.services.ExamAndTest.TestService;
+import com.example.english_exam.util.AuthUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.AllArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -21,19 +23,18 @@ public class ClassController {
 
     private final ClassService classService;
     private final TestService testService;
+    private final AuthUtils authUtils;
 
-    // 🟢 Tạo lớp học mới (teacherId lấy từ token)
     @PostMapping
-    public ResponseEntity<?> createClass(@RequestBody ClassEntity classEntity, HttpServletRequest request) {
+    public ResponseEntity<?> createClass(@RequestBody ClassRequest request, HttpServletRequest httpRequest) {
         try {
-            ClassEntity created = classService.createClass(classEntity, request);
-            return ResponseEntity.ok(created);
+            ClassResponse created = classService.createClass(request, httpRequest);
+            return ResponseEntity.status(HttpStatus.CREATED).body(created);
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
 
-    // 🟢 Lấy tất cả lớp của giáo viên hiện tại (từ JWT)
     @GetMapping("/my")
     public ResponseEntity<?> getMyClasses(HttpServletRequest request) {
         try {
@@ -44,17 +45,16 @@ public class ClassController {
         }
     }
 
-    // 🟢 Sửa thông tin lớp học
     @PutMapping("/{classId}")
     public ResponseEntity<?> updateClass(
             @PathVariable Long classId,
-            @RequestBody ClassEntity updated,
-            HttpServletRequest request) {
+            @RequestBody ClassRequest request,
+            HttpServletRequest httpRequest) {
         try {
-            ClassEntity result = classService.updateClass(classId, updated, request);
+            ClassResponse result = classService.updateClass(classId, request, httpRequest);
             return ResponseEntity.ok(result);
         } catch (RuntimeException e) {
-            if (e.getMessage().contains("authorized")) {
+            if (e.getMessage() != null && e.getMessage().contains("authorized")) {
                 return ResponseEntity.status(403).body(Map.of("error", e.getMessage()));
             }
             return ResponseEntity.status(404).body(Map.of("error", e.getMessage()));
@@ -63,14 +63,11 @@ public class ClassController {
         }
     }
 
-
-    // 🟢 Lấy tất cả lớp theo teacherId (cho admin hoặc quản trị)
     @GetMapping("/teacher/{teacherId}")
-    public ResponseEntity<List<ClassEntity>> getClassesByTeacher(@PathVariable Long teacherId) {
+    public ResponseEntity<List<ClassResponse>> getClassesByTeacher(@PathVariable Long teacherId) {
         return ResponseEntity.ok(classService.getClassesByTeacher(teacherId));
     }
 
-    // 🟢 Lấy thông tin chi tiết của 1 lớp
     @GetMapping("/{classId}")
     public ResponseEntity<?> getById(@PathVariable Long classId) {
         try {
@@ -80,17 +77,14 @@ public class ClassController {
         }
     }
 
-    // 🟢 Xóa lớp học (giáo viên hiện tại chỉ được xóa lớp của mình)
     @DeleteMapping("/{classId}")
     public ResponseEntity<?> deleteClass(@PathVariable Long classId, HttpServletRequest request) {
         try {
             Long teacherId = classService.getCurrentTeacherId(request);
-            ClassEntity clazz = classService.getById(classId);
-
+            ClassResponse clazz = classService.getById(classId);
             if (!clazz.getTeacherId().equals(teacherId)) {
                 return ResponseEntity.status(403).body(Map.of("error", "You do not own this class"));
             }
-
             classService.deleteClass(classId);
             return ResponseEntity.noContent().build();
         } catch (RuntimeException e) {
@@ -99,34 +93,23 @@ public class ClassController {
     }
 
     @GetMapping("/{classId}/chapters/{chapterId}/tests")
-    public ResponseEntity<?> getTestsByClassAndChapter(@PathVariable Long classId,@PathVariable Long chapterId, HttpServletRequest request) {
-        List<Test> tests = testService.getTestByClassIdAndChapterId(classId,chapterId, request);
-
-        if (tests.isEmpty()) {
+    public ResponseEntity<?> getTestsByClassAndChapter(
+            @PathVariable Long classId,
+            @PathVariable Long chapterId,
+            HttpServletRequest request) {
+        Long userId = null;
+        try {
+            userId = authUtils.getUserId(request);
+        } catch (Exception ignored) {
+        }
+        final Long userIdFinal = userId;
+        List<TestResponse> responses = testService.getTestByClassIdAndChapterId(classId, chapterId, request)
+                .stream()
+                .map(t -> testService.buildUserTestSummary(t, userIdFinal))
+                .toList();
+        if (responses.isEmpty()) {
             return ResponseEntity.ok(Map.of("message", "Không có bài test nào trong lớp này"));
         }
-
-        return ResponseEntity.ok(
-                tests.stream()
-                        .map(test -> TestResponse.builder()
-                                .testId(test.getTestId())
-                                .title(test.getTitle())
-                                .description(test.getDescription())
-                                .examTypeId(test.getExamTypeId())
-                                .createdBy(test.getCreatedBy())
-                                .createdAt(test.getCreatedAt())
-                                .bannerUrl(test.getBannerUrl())
-                                .durationMinutes(test.getDurationMinutes())
-                                .availableFrom(test.getAvailableFrom())
-                                .availableTo(test.getAvailableTo())
-                                .status(test.calculateStatus().name())
-                                .maxAttempts(test.getMaxAttempts())
-                                .attemptsUsed(null)
-                                .remainingAttempts(null)
-                                .canDoTest(true)
-                                .parts(null)
-                                .build()
-                        )
-                        .toList()
-        );    }
+        return ResponseEntity.ok(responses);
+    }
 }

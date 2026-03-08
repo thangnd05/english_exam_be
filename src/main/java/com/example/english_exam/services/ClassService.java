@@ -1,16 +1,17 @@
 package com.example.english_exam.services;
 
+import com.example.english_exam.dto.request.ClassRequest;
+import com.example.english_exam.dto.response.ClassResponse;
 import com.example.english_exam.dto.response.ClassSimpleResponse;
 import com.example.english_exam.models.ClassEntity;
 import com.example.english_exam.repositories.ClassRepository;
-import com.example.english_exam.security.AuthService;
 import com.example.english_exam.util.AuthUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -21,56 +22,46 @@ public class ClassService {
     private final ClassRepository classRepository;
     private final AuthUtils authUtils;
 
-    // 🟢 Tạo lớp học mới (sinh ID ngẫu nhiên & gán teacherId từ token)
-//    @PreAuthorize("!hasRole('USER')")
     @Transactional
-    public ClassEntity createClass(ClassEntity classEntity, HttpServletRequest httpRequest) {
-        // 🔹 Lấy userId hiện tại từ JWT
-
+    public ClassResponse createClass(ClassRequest request, HttpServletRequest httpRequest) {
         Long currentUserId = authUtils.getUserId(httpRequest);
 
-
-        // 🔹 Sinh ID ngẫu nhiên cho class (8 chữ số)
         long randomId;
         do {
             randomId = ThreadLocalRandom.current().nextLong(10_000_000L, 99_999_999L);
         } while (classRepository.existsById(randomId));
 
-        // 🔹 Gán thông tin lớp
         ClassEntity clazz = ClassEntity.builder()
                 .classId(randomId)
-                .className(classEntity.getClassName())
-                .description(classEntity.getDescription())
+                .className(request.getClassName())
+                .description(request.getDescription())
                 .teacherId(currentUserId)
-                .createdAt(classEntity.getCreatedAt())
+                .createdAt(LocalDateTime.now())
                 .build();
 
-        // 🔹 Lưu vào DB
-        return classRepository.save(clazz);
+        clazz = classRepository.save(clazz);
+        return toResponse(clazz);
     }
 
-    // 🟢 Lấy tất cả lớp của 1 giáo viên
-    public List<ClassEntity> getClassesByTeacher(Long teacherId) {
-        return classRepository.findByTeacherId(teacherId);
+    public List<ClassResponse> getClassesByTeacher(Long teacherId) {
+        return classRepository.findByTeacherId(teacherId).stream()
+                .map(this::toResponse)
+                .toList();
     }
 
     public List<ClassSimpleResponse> getMyClasses(HttpServletRequest request) {
         Long teacherId = authUtils.getUserId(request);
-
-        List<ClassEntity> classes = classRepository.findByTeacherId(teacherId);
-
-        return classes.stream()
+        return classRepository.findByTeacherId(teacherId).stream()
                 .map(c -> new ClassSimpleResponse(c.getClassId(), c.getClassName()))
                 .toList();
     }
 
-    // 🟢 Lấy thông tin 1 lớp
-    public ClassEntity getById(Long classId) {
-        return classRepository.findById(classId)
+    public ClassResponse getById(Long classId) {
+        ClassEntity clazz = classRepository.findById(classId)
                 .orElseThrow(() -> new RuntimeException("Class not found with ID: " + classId));
+        return toResponse(clazz);
     }
 
-    // 🟢 Xóa lớp (sẽ cascade xóa class_members)
     @Transactional
     public void deleteClass(Long classId) {
         if (!classRepository.existsById(classId)) {
@@ -83,26 +74,30 @@ public class ClassService {
         return authUtils.getUserId(request);
     }
 
-    // 🟢 Cập nhật thông tin lớp học
     @Transactional
-    public ClassEntity updateClass(Long classId, ClassEntity updated, HttpServletRequest request) {
-        Long currentUserId = authUtils.getUserId(request);
-        // Tìm lớp hiện tại
+    public ClassResponse updateClass(Long classId, ClassRequest request, HttpServletRequest httpRequest) {
+        Long currentUserId = authUtils.getUserId(httpRequest);
         ClassEntity existing = classRepository.findById(classId)
                 .orElseThrow(() -> new RuntimeException("Class not found with ID: " + classId));
 
-        // Kiểm tra quyền: chỉ giáo viên tạo lớp mới được sửa
         if (!existing.getTeacherId().equals(currentUserId)) {
             throw new RuntimeException("You are not authorized to update this class!");
         }
 
-        // Cập nhật thông tin
-        existing.setClassName(updated.getClassName());
-        existing.setDescription(updated.getDescription());
+        if (request.getClassName() != null) existing.setClassName(request.getClassName());
+        if (request.getDescription() != null) existing.setDescription(request.getDescription());
 
-        // Lưu lại
-        return classRepository.save(existing);
+        existing = classRepository.save(existing);
+        return toResponse(existing);
     }
 
-
+    private ClassResponse toResponse(ClassEntity c) {
+        ClassResponse res = new ClassResponse();
+        res.setClassId(c.getClassId());
+        res.setClassName(c.getClassName());
+        res.setDescription(c.getDescription());
+        res.setTeacherId(c.getTeacherId());
+        res.setCreatedAt(c.getCreatedAt());
+        return res;
+    }
 }
