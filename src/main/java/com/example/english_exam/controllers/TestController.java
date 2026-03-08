@@ -126,15 +126,18 @@ public class TestController {
         }
     }
 
-    // Cập nhật test
+    // Cập nhật test (dùng chung CreateTestRequest; chỉ ghi đè field gửi lên, không đổi createdBy/createdAt)
     @PutMapping("/{id}")
-    public ResponseEntity<Test> updateTest(@PathVariable Long id, @RequestBody Test updatedTest) {
-        return testService.getTestById(id)
-                .map(existing -> {
-                    updatedTest.setTestId(id);
-                    return ResponseEntity.ok(testService.save(updatedTest)); // 200 OK
-                })
-                .orElse(ResponseEntity.notFound().build()); // 404 Not Found
+    public ResponseEntity<Test> updateTest(@PathVariable Long id, @RequestBody CreateTestRequest request) {
+        try {
+            Test updated = testService.updateTest(id, request);
+            return ResponseEntity.ok(updated);
+        } catch (RuntimeException e) {
+            if (e.getMessage() != null && e.getMessage().contains("không tồn tại")) {
+                return ResponseEntity.notFound().build();
+            }
+            return ResponseEntity.badRequest().build();
+        }
     }
 
     // Xoá test

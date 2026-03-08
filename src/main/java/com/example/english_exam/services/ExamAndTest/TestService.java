@@ -3,6 +3,7 @@ package com.example.english_exam.services.ExamAndTest;
 import com.example.english_exam.cloudinary.CloudinaryService;
 import com.example.english_exam.dto.request.AddQuestionsToTestRequest;
 import com.example.english_exam.dto.request.AddRandomQuestionsToTestRequest;
+import com.example.english_exam.dto.request.CreateTestRequest;
 import com.example.english_exam.dto.response.AddRandomQuestionsResponse;
 import com.example.english_exam.dto.response.*;
 import com.example.english_exam.dto.response.admin.*;
@@ -60,6 +61,26 @@ public class TestService {
 
     public void deleteTest(Long id) {
         testRepository.deleteById(id);
+    }
+
+    /**
+     * Cập nhật test từ CreateTestRequest (dùng chung DTO với tạo mới).
+     * Chỉ ghi đè các field được gửi lên (khác null); không đổi createdBy, createdAt.
+     */
+    public Test updateTest(Long id, CreateTestRequest request) {
+        Test test = testRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Test không tồn tại: " + id));
+        if (request.getTitle() != null) test.setTitle(request.getTitle());
+        if (request.getDescription() != null) test.setDescription(request.getDescription());
+        if (request.getExamTypeId() != null) test.setExamTypeId(request.getExamTypeId());
+        if (request.getDurationMinutes() != null) test.setDurationMinutes(request.getDurationMinutes());
+        if (request.getBannerUrl() != null) test.setBannerUrl(request.getBannerUrl());
+        if (request.getMaxAttempts() != null) test.setMaxAttempts(request.getMaxAttempts());
+        if (request.getClassId() != null) test.setClassId(request.getClassId());
+        if (request.getChapterId() != null) test.setChapterId(request.getChapterId());
+        if (request.getAvailableFrom() != null) test.setAvailableFrom(request.getAvailableFrom());
+        if (request.getAvailableTo() != null) test.setAvailableTo(request.getAvailableTo());
+        return testRepository.save(test);
     }
 
     public TestResponse buildUserTestSummary(Test test, Long userId) {
