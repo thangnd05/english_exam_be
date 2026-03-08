@@ -83,20 +83,22 @@ public class EvaluationService {
     // ✅ UPDATE
     // ============================
     public EvaluationResponse update(Long id, EvaluationRequest request) {
-
         Evaluation evaluation = evaluationRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Evaluation not found"));
-
-        evaluation.setContent(request.getContent());
-        evaluation.setRating(request.getRating());
-
+        if (request.getContent() != null) evaluation.setContent(request.getContent());
+        if (request.getRating() != null) evaluation.setRating(request.getRating());
         return toResponse(evaluationRepository.save(evaluation));
     }
 
-    // ============================
-    // ✅ DELETE
-    // ============================
+    public EvaluationResponse getById(Long id) {
+        Evaluation evaluation = evaluationRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Evaluation not found"));
+        return toResponse(evaluation);
+    }
+
     public void delete(Long id) {
-        evaluationRepository.deleteById(id);
+        Evaluation evaluation = evaluationRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Evaluation not found"));
+        evaluationRepository.delete(evaluation);
     }
 }

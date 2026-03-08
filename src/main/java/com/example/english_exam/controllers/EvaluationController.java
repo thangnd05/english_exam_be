@@ -5,6 +5,7 @@ import com.example.english_exam.dto.response.EvaluationResponse;
 import com.example.english_exam.services.EvaluationService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.AllArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -17,45 +18,66 @@ public class EvaluationController {
 
     private final EvaluationService evaluationService;
 
-    // ✅ CREATE
     @PostMapping
     public ResponseEntity<EvaluationResponse> create(
             HttpServletRequest httpRequest,
             @RequestBody EvaluationRequest request
     ) {
-        return ResponseEntity.ok(
-                evaluationService.create(httpRequest, request)
-        );
+        try {
+            EvaluationResponse created = evaluationService.create(httpRequest, request);
+            return ResponseEntity.status(HttpStatus.CREATED).body(created);
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().build();
+        }
     }
 
-
-    // ✅ GET ALL
     @GetMapping
     public ResponseEntity<List<EvaluationResponse>> getAll() {
         return ResponseEntity.ok(evaluationService.getAll());
     }
 
-    // ✅ GET BY USER
+    @GetMapping("/{id}")
+    public ResponseEntity<EvaluationResponse> getById(@PathVariable Long id) {
+        try {
+            return ResponseEntity.ok(evaluationService.getById(id));
+        } catch (RuntimeException e) {
+            if (e.getMessage() != null && e.getMessage().contains("not found")) {
+                return ResponseEntity.notFound().build();
+            }
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
     @GetMapping("/user/{userId}")
-    public ResponseEntity<List<EvaluationResponse>> getByUser(
-            @PathVariable Long userId
-    ) {
+    public ResponseEntity<List<EvaluationResponse>> getByUser(@PathVariable Long userId) {
         return ResponseEntity.ok(evaluationService.getByUser(userId));
     }
 
-    // ✅ UPDATE
     @PutMapping("/{id}")
     public ResponseEntity<EvaluationResponse> update(
             @PathVariable Long id,
             @RequestBody EvaluationRequest request
     ) {
-        return ResponseEntity.ok(evaluationService.update(id, request));
+        try {
+            return ResponseEntity.ok(evaluationService.update(id, request));
+        } catch (RuntimeException e) {
+            if (e.getMessage() != null && e.getMessage().contains("not found")) {
+                return ResponseEntity.notFound().build();
+            }
+            return ResponseEntity.badRequest().build();
+        }
     }
 
-    // ✅ DELETE
     @DeleteMapping("/{id}")
-    public ResponseEntity<?> delete(@PathVariable Long id) {
-        evaluationService.delete(id);
-        return ResponseEntity.ok("Deleted successfully");
+    public ResponseEntity<Void> delete(@PathVariable Long id) {
+        try {
+            evaluationService.delete(id);
+            return ResponseEntity.noContent().build();
+        } catch (RuntimeException e) {
+            if (e.getMessage() != null && e.getMessage().contains("not found")) {
+                return ResponseEntity.notFound().build();
+            }
+            return ResponseEntity.badRequest().build();
+        }
     }
 }
