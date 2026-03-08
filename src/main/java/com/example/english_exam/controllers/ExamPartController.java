@@ -1,8 +1,10 @@
 package com.example.english_exam.controllers;
 
-import com.example.english_exam.models.ExamPart;
+import com.example.english_exam.dto.request.ExamPartRequest;
+import com.example.english_exam.dto.response.ExamPartResponse;
 import com.example.english_exam.services.ExamAndTest.ExamPartService;
 import lombok.AllArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -12,53 +14,58 @@ import java.util.List;
 @RequestMapping("/api/exam-parts")
 @AllArgsConstructor
 public class ExamPartController {
+
     private final ExamPartService examPartService;
 
-    // Lấy tất cả exam parts
     @GetMapping
-    public ResponseEntity<List<ExamPart>> getAllExamParts() {
+    public ResponseEntity<List<ExamPartResponse>> getAllExamParts() {
         return ResponseEntity.ok(examPartService.findAll());
     }
 
-    // Lấy tất cả exam parts theo examTypeId
     @GetMapping("/by-exam-type/{examTypeId}")
-    public ResponseEntity<List<ExamPart>> getExamPartsByExamType(@PathVariable Long examTypeId) {
+    public ResponseEntity<List<ExamPartResponse>> getExamPartsByExamType(@PathVariable Long examTypeId) {
         return ResponseEntity.ok(examPartService.findByExamTypeId(examTypeId));
     }
 
-    // Lấy exam part theo id
     @GetMapping("/{id}")
-    public ResponseEntity<ExamPart> getExamPartById(@PathVariable Long id) {
-        return examPartService.findById(id)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+    public ResponseEntity<ExamPartResponse> getExamPartById(@PathVariable Long id) {
+        try {
+            return ResponseEntity.ok(examPartService.findById(id));
+        } catch (RuntimeException e) {
+            if (e.getMessage() != null && e.getMessage().contains("không tồn tại")) {
+                return ResponseEntity.notFound().build();
+            }
+            return ResponseEntity.badRequest().build();
+        }
     }
 
-    // Tạo mới exam part
     @PostMapping
-    public ResponseEntity<ExamPart> createExamPart(@RequestBody ExamPart examPart) {
-        return ResponseEntity.ok(examPartService.save(examPart));
+    public ResponseEntity<ExamPartResponse> createExamPart(@RequestBody ExamPartRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(examPartService.create(request));
     }
 
-    // Cập nhật exam part
     @PutMapping("/{id}")
-    public ResponseEntity<ExamPart> updateExamPart(@PathVariable Long id, @RequestBody ExamPart updatedExamPart) {
-        return examPartService.findById(id)
-                .map(existing -> {
-                    updatedExamPart.setExamPartId(id);
-                    return ResponseEntity.ok(examPartService.save(updatedExamPart));
-                })
-                .orElse(ResponseEntity.notFound().build());
+    public ResponseEntity<ExamPartResponse> updateExamPart(@PathVariable Long id, @RequestBody ExamPartRequest request) {
+        try {
+            return ResponseEntity.ok(examPartService.update(id, request));
+        } catch (RuntimeException e) {
+            if (e.getMessage() != null && e.getMessage().contains("không tồn tại")) {
+                return ResponseEntity.notFound().build();
+            }
+            return ResponseEntity.badRequest().build();
+        }
     }
 
-    // Xóa exam part
     @DeleteMapping("/{id}")
-    public ResponseEntity<?> deleteExamPart(@PathVariable Long id) {
-        return examPartService.findById(id)
-                .map(existing -> {
-                    examPartService.deleteById(id);
-                    return ResponseEntity.noContent().build();
-                })
-                .orElse(ResponseEntity.notFound().build());
+    public ResponseEntity<Void> deleteExamPart(@PathVariable Long id) {
+        try {
+            examPartService.delete(id);
+            return ResponseEntity.noContent().build();
+        } catch (RuntimeException e) {
+            if (e.getMessage() != null && e.getMessage().contains("không tồn tại")) {
+                return ResponseEntity.notFound().build();
+            }
+            return ResponseEntity.badRequest().build();
+        }
     }
 }

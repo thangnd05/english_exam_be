@@ -1,8 +1,10 @@
 package com.example.english_exam.controllers;
 
-import com.example.english_exam.models.ExamType;
+import com.example.english_exam.dto.request.ExamTypeRequest;
+import com.example.english_exam.dto.response.ExamTypeResponse;
 import com.example.english_exam.services.ExamAndTest.ExamTypeService;
 import lombok.AllArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -12,47 +14,53 @@ import java.util.List;
 @RequestMapping("/api/exam-types")
 @AllArgsConstructor
 public class ExamTypeController {
+
     private final ExamTypeService examTypeService;
 
-    // Lấy tất cả exam types
     @GetMapping
-    public ResponseEntity<List<ExamType>> getAllExamTypes() {
+    public ResponseEntity<List<ExamTypeResponse>> getAllExamTypes() {
         return ResponseEntity.ok(examTypeService.findAll());
     }
 
-    // Lấy exam type theo id
     @GetMapping("/{id}")
-    public ResponseEntity<ExamType> getExamTypeById(@PathVariable Long id) {
-        return examTypeService.findById(id)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+    public ResponseEntity<ExamTypeResponse> getExamTypeById(@PathVariable Long id) {
+        try {
+            return ResponseEntity.ok(examTypeService.findById(id));
+        } catch (RuntimeException e) {
+            if (e.getMessage() != null && e.getMessage().contains("không tồn tại")) {
+                return ResponseEntity.notFound().build();
+            }
+            return ResponseEntity.badRequest().build();
+        }
     }
 
-    // Tạo mới exam type
     @PostMapping
-    public ResponseEntity<ExamType> createExamType(@RequestBody ExamType examType) {
-        return ResponseEntity.ok(examTypeService.save(examType));
+    public ResponseEntity<ExamTypeResponse> createExamType(@RequestBody ExamTypeRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(examTypeService.create(request));
     }
 
-    // Cập nhật exam type
     @PutMapping("/{id}")
-    public ResponseEntity<ExamType> updateExamType(@PathVariable Long id, @RequestBody ExamType updatedExamType) {
-        return examTypeService.findById(id)
-                .map(existing -> {
-                    updatedExamType.setExamTypeId(id);
-                    return ResponseEntity.ok(examTypeService.save(updatedExamType));
-                })
-                .orElse(ResponseEntity.notFound().build());
+    public ResponseEntity<ExamTypeResponse> updateExamType(@PathVariable Long id, @RequestBody ExamTypeRequest request) {
+        try {
+            return ResponseEntity.ok(examTypeService.update(id, request));
+        } catch (RuntimeException e) {
+            if (e.getMessage() != null && e.getMessage().contains("không tồn tại")) {
+                return ResponseEntity.notFound().build();
+            }
+            return ResponseEntity.badRequest().build();
+        }
     }
 
-    // Xóa exam type
     @DeleteMapping("/{id}")
-    public ResponseEntity<?> deleteExamType(@PathVariable Long id) {
-        return examTypeService.findById(id)
-                .map(existing -> {
-                    examTypeService.deleteById(id);
-                    return ResponseEntity.noContent().build();
-                })
-                .orElse(ResponseEntity.notFound().build());
+    public ResponseEntity<Void> deleteExamType(@PathVariable Long id) {
+        try {
+            examTypeService.delete(id);
+            return ResponseEntity.noContent().build();
+        } catch (RuntimeException e) {
+            if (e.getMessage() != null && e.getMessage().contains("không tồn tại")) {
+                return ResponseEntity.notFound().build();
+            }
+            return ResponseEntity.badRequest().build();
+        }
     }
 }
