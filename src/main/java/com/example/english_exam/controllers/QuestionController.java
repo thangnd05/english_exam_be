@@ -8,6 +8,7 @@ import com.example.english_exam.models.Question;
 import com.example.english_exam.services.ExamAndTest.QuestionService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -158,46 +159,17 @@ public class QuestionController {
     // =================== UPDATE ===================
 
     /** Cập nhật nội dung câu hỏi (và passage). Không đụng tới đáp án. Body: QuestionCreateRequest (patch). */
-    @PutMapping(value = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    @PutMapping(value = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<QuestionAdminResponse> updateQuestion(
             @PathVariable Long id,
-            @RequestBody QuestionCreateRequest request,
+            @Valid @RequestBody QuestionCreateRequest request, // Thêm @Valid
             HttpServletRequest httpRequest
     ) {
-        try {
-            QuestionAdminResponse response = questionService.updateQuestion(id, request, httpRequest);
-            return ResponseEntity.ok(response);
-        } catch (RuntimeException e) {
-            if (e.getMessage() != null && (e.getMessage().contains("không tồn tại") || e.getMessage().contains("not found"))) {
-                return ResponseEntity.notFound().build();
-            }
-            if (e.getMessage() != null && e.getMessage().contains("Chỉ người tạo")) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-            }
-            return ResponseEntity.badRequest().build();
-        }
+        // Không cần try-catch ở đây nữa, Exception sẽ được Handle tập trung
+        QuestionAdminResponse response = questionService.updateQuestion(id, request, httpRequest);
+        return ResponseEntity.ok(response);
     }
 
-    /** Cập nhật đáp án của câu hỏi. Body: [ AnswerRequest, ... ] — có answerId = sửa, không có = thêm; không gửi = xóa. */
-    @PutMapping(value = "/{id}/answers", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<List<AnswerAdminResponse>> updateQuestionAnswers(
-            @PathVariable Long id,
-            @RequestBody List<AnswerRequest> answers,
-            HttpServletRequest httpRequest
-    ) {
-        try {
-            List<AnswerAdminResponse> response = questionService.updateQuestionAnswers(id, answers, httpRequest);
-            return ResponseEntity.ok(response);
-        } catch (RuntimeException e) {
-            if (e.getMessage() != null && (e.getMessage().contains("không tồn tại") || e.getMessage().contains("not found"))) {
-                return ResponseEntity.notFound().build();
-            }
-            if (e.getMessage() != null && e.getMessage().contains("Chỉ người tạo")) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-            }
-            return ResponseEntity.badRequest().build();
-        }
-    }
 
     // =================== DELETE ===================
 

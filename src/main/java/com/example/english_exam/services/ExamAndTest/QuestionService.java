@@ -460,70 +460,6 @@ public class QuestionService {
         return answerRepository.saveAll(list);
     }
 
-    /**
-     * Sửa / merge đáp án khi update câu hỏi: có answerId thì cập nhật, không có thì thêm mới;
-     * đáp án hiện có mà không nằm trong request thì xóa.
-     */
-    private List<Answer> updateOrMergeAnswersForQuestion(
-            Long questionId,
-            List<AnswerRequest> answers,
-            Question.QuestionType questionType
-    ) {
-        if (answers == null || answers.isEmpty()) {
-            return answerRepository.findByQuestionId(questionId);
-        }
-
-        Set<Long> keptAnswerIds = new HashSet<>();
-
-        if (questionType == Question.QuestionType.FILL_BLANK) {
-            AnswerRequest ar = answers.get(0);
-            if (ar.getAnswerId() != null) {
-                answerRepository.findByQuestionIdAndAnswerId(questionId, ar.getAnswerId()).ifPresent(a -> {
-                    a.setAnswerText(ar.getAnswerText() != null ? ar.getAnswerText() : "");
-                    a.setAnswerLabel(ar.getAnswerLabel() != null ? ar.getAnswerLabel() : "");
-                    a.setIsCorrect(true);
-                    answerRepository.save(a);
-                    keptAnswerIds.add(a.getAnswerId());
-                });
-            } else {
-                Answer a = new Answer();
-                a.setQuestionId(questionId);
-                a.setAnswerText(ar.getAnswerText() != null ? ar.getAnswerText() : "");
-                a.setAnswerLabel(ar.getAnswerLabel() != null ? ar.getAnswerLabel() : "");
-                a.setIsCorrect(true);
-                a = answerRepository.save(a);
-                keptAnswerIds.add(a.getAnswerId());
-            }
-        } else {
-            for (AnswerRequest ar : answers) {
-                if (ar.getAnswerId() != null) {
-                    answerRepository.findByQuestionIdAndAnswerId(questionId, ar.getAnswerId()).ifPresent(a -> {
-                        a.setAnswerText(ar.getAnswerText() != null ? ar.getAnswerText() : "");
-                        a.setAnswerLabel(ar.getAnswerLabel() != null ? ar.getAnswerLabel() : "");
-                        a.setIsCorrect(Boolean.TRUE.equals(ar.getIsCorrect()));
-                        answerRepository.save(a);
-                        keptAnswerIds.add(a.getAnswerId());
-                    });
-                } else {
-                    Answer a = new Answer();
-                    a.setQuestionId(questionId);
-                    a.setAnswerText(ar.getAnswerText() != null ? ar.getAnswerText() : "");
-                    a.setAnswerLabel(ar.getAnswerLabel() != null ? ar.getAnswerLabel() : "");
-                    a.setIsCorrect(Boolean.TRUE.equals(ar.getIsCorrect()));
-                    a = answerRepository.save(a);
-                    keptAnswerIds.add(a.getAnswerId());
-                }
-            }
-        }
-
-        List<Answer> existing = answerRepository.findByQuestionId(questionId);
-        for (Answer a : existing) {
-            if (!keptAnswerIds.contains(a.getAnswerId())) {
-                answerRepository.delete(a);
-            }
-        }
-        return answerRepository.findByQuestionId(questionId);
-    }
 
     private QuestionAdminResponse buildQuestionAdminResponse(Question question, Passage passage,
                                                              List<Answer> answerEntities, Long testPartId) {
@@ -650,40 +586,17 @@ public class QuestionService {
         }
 
         question = questionRepository.save(question);
-        List<Answer> answers = answerRepository.findByQuestionId(questionId);
-        if (passage == null && question.getPassageId() != null) {
-            passage = passageRepository.findById(question.getPassageId()).orElse(null);
-        }
-        return buildQuestionAdminResponse(question, passage, answers, null);
+        List<Answer> updatedAnswers = answerService.syncAnswers(questionId, request.getAnswers());
+
+        // Bước 4: Chuẩn bị dữ liệu ngoại vi (External Data)
+        Long examTypeId = examPartRepository.findById(question.getExamPartId())
+                .map(ExamPart::getExamTypeId).orElse(null);
+
+        // Bước 5: Trả về kết quả
+        return buildQuestionAdminResponse(question, passage, updatedAnswers, examTypeId);
     }
 
-    /**
-     * Cập nhật đáp án của một câu hỏi. Có answerId = sửa, không có = thêm; không gửi trong list = xóa.
-     * Chỉ user tạo câu được sửa.
-     */
-    @Transactional
-    public List<AnswerAdminResponse> updateQuestionAnswers(Long questionId, List<AnswerRequest> answers, HttpServletRequest httpRequest) {
-        Long currentUserId = authUtils.getUserId(httpRequest);
-        if (currentUserId == null) {
-            throw new RuntimeException("Không xác định được người dùng từ token.");
-        }
 
-        Question question = questionRepository.findById(questionId)
-                .orElseThrow(() -> new RuntimeException("Câu hỏi không tồn tại."));
-        if (!currentUserId.equals(question.getCreatedBy())) {
-            throw new RuntimeException("Chỉ người tạo câu hỏi mới được sửa đáp án.");
-        }
-
-        List<Answer> saved = updateOrMergeAnswersForQuestion(questionId, answers != null ? answers : List.of(), question.getQuestionType());
-        return saved.stream()
-                .map(a -> AnswerAdminResponse.builder()
-                        .answerId(a.getAnswerId())
-                        .answerText(a.getAnswerText())
-                        .answerLabel(a.getAnswerLabel())
-                        .isCorrect(a.getIsCorrect())
-                        .build())
-                .toList();
-    }
 
     @Transactional
     public List<QuestionAdminResponse> createBulkGroups(
