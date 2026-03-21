@@ -1,7 +1,10 @@
 package com.example.english_exam.dto.response.admin;
 
+import com.example.english_exam.dto.response.PassageMediaResponse;
+import com.example.english_exam.dto.response.PassageResponse;
 import com.example.english_exam.models.Question;
 import lombok.*;
+
 import java.util.List;
 
 @Getter
@@ -19,6 +22,9 @@ public class QuestionAdminResponse {
     private final Long examTypeId;
     private final Long classId;
     private final Boolean isBank;
+
+    private final PassageResponse passage;
+    private final List<PassageMediaResponse> passageMedia;
 
     private final List<AnswerAdminResponse> answers;
 }

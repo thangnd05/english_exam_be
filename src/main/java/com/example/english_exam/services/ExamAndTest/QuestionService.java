@@ -2,6 +2,7 @@ package com.example.english_exam.services.ExamAndTest;
 
 import com.example.english_exam.cloudinary.CloudinaryService;
 import com.example.english_exam.dto.request.*;
+import com.example.english_exam.dto.response.PassageMediaResponse;
 import com.example.english_exam.dto.response.PassageResponse;
 import com.example.english_exam.dto.response.admin.AnswerAdminResponse;
 import com.example.english_exam.dto.response.admin.QuestionAdminResponse;
@@ -18,7 +19,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
 @AllArgsConstructor
@@ -187,7 +187,7 @@ public class QuestionService {
             question = questionRepository.save(question);
 
             List<Answer> savedAnswers = saveAnswersForQuestion(question.getQuestionId(), qReq.getAnswers(), qReq.getQuestionType());
-            responses.add(buildQuestionAdminResponse(question, passage, savedAnswers, null));
+            responses.add(buildQuestionAdminResponse(question, passage, savedAnswers));
         }
         return responses;
     }
@@ -298,7 +298,7 @@ public class QuestionService {
             );
 
             responses.add(
-                    buildQuestionAdminResponse(question, null, savedAnswers, null)
+                    buildQuestionAdminResponse(question, null, savedAnswers)
             );
         }
 
@@ -408,7 +408,7 @@ public class QuestionService {
         tq.setQuestionId(question.getQuestionId());
         testQuestionRepository.save(tq);
 
-        return buildQuestionAdminResponse(question, savedPassage, savedAnswers, request.getTestPartId());
+        return buildQuestionAdminResponse(question, savedPassage, savedAnswers);
     }
 
     private boolean hasPassageContent(PassageRequest pr) {
@@ -461,14 +461,68 @@ public class QuestionService {
     }
 
 
+    private List<PassageMediaResponse> toPassageMediaResponses(Long passageId) {
+        if (passageId == null) {
+            return List.of();
+        }
+        return passageMediaRepository.findByPassageId(passageId).stream()
+                .map(m -> new PassageMediaResponse(
+                        m.getId(),
+                        m.getPassageId(),
+                        m.getMediaUrl(),
+                        m.getMediaType().name()
+                ))
+                .toList();
+    }
+
+    /**
+     * Upload thêm file vào passage (append vào passage_media). Giống luồng create-and-attach.
+     */
+    private void appendUploadedFilesToPassage(Long passageId, Collection<MultipartFile> files) throws IOException {
+        if (files == null || files.isEmpty()) {
+            return;
+        }
+        for (MultipartFile file : files) {
+            if (file == null || file.isEmpty()) {
+                continue;
+            }
+            String contentType = file.getContentType();
+            String uploadedUrl;
+            PassageMedia.MediaType mediaType;
+            if (contentType != null && contentType.startsWith("image")) {
+                uploadedUrl = cloudinaryService.uploadImage(file);
+                mediaType = PassageMedia.MediaType.IMAGE;
+            } else if (contentType != null && contentType.startsWith("audio")) {
+                uploadedUrl = cloudinaryService.uploadAudio(file);
+                mediaType = PassageMedia.MediaType.AUDIO;
+            } else {
+                uploadedUrl = cloudinaryService.uploadDocument(file);
+                mediaType = PassageMedia.MediaType.DOCUMENT;
+            }
+            PassageMedia media = new PassageMedia();
+            media.setPassageId(passageId);
+            media.setMediaUrl(uploadedUrl);
+            media.setMediaType(mediaType);
+            passageMediaRepository.save(media);
+        }
+    }
+
     private QuestionAdminResponse buildQuestionAdminResponse(Question question, Passage passage,
-                                                             List<Answer> answerEntities, Long testPartId) {
+                                                             List<Answer> answerEntities) {
         Long examTypeId = examPartRepository.findById(question.getExamPartId())
                 .map(ExamPart::getExamTypeId).orElse(null);
         PassageResponse passageDto = null;
         if (passage != null) {
-            passageDto = new PassageResponse(passage.getPassageId(), passage.getContent(), passage.getMediaUrl(), passage.getPassageType());
+            passageDto = new PassageResponse(
+                    passage.getPassageId(),
+                    passage.getContent(),
+                    passage.getMediaUrl(),
+                    passage.getPassageType()
+            );
         }
+        List<PassageMediaResponse> passageMedia = passage != null
+                ? toPassageMediaResponses(passage.getPassageId())
+                : List.of();
         List<AnswerAdminResponse> answerDtos = answerEntities.stream()
                 .map(a -> AnswerAdminResponse.builder()
                         .answerId(a.getAnswerId())
@@ -487,6 +541,8 @@ public class QuestionService {
                 .examTypeId(examTypeId)
                 .classId(question.getClassId())
                 .isBank(question.getIsBank())
+                .passage(passageDto)
+                .passageMedia(passageMedia)
                 .answers(answerDtos)
                 .build();
     }
@@ -500,15 +556,20 @@ public class QuestionService {
                 .map(ExamPart::getExamTypeId)
                 .orElse(null);
 
-        PassageResponse passageDto = Optional.ofNullable(question.getPassageId())
+        Passage passageEntity = Optional.ofNullable(question.getPassageId())
                 .flatMap(passageRepository::findById)
-                .map(p -> new PassageResponse(
-                        p.getPassageId(),
-                        p.getContent(),
-                        p.getMediaUrl(),
-                        p.getPassageType()
-                ))
                 .orElse(null);
+        PassageResponse passageDto = passageEntity != null
+                ? new PassageResponse(
+                passageEntity.getPassageId(),
+                passageEntity.getContent(),
+                passageEntity.getMediaUrl(),
+                passageEntity.getPassageType()
+        )
+                : null;
+        List<PassageMediaResponse> passageMedia = passageEntity != null
+                ? toPassageMediaResponses(passageEntity.getPassageId())
+                : List.of();
 
         List<AnswerAdminResponse> answers = answerRepository.findByQuestionId(questionId)
                 .stream()
@@ -530,16 +591,30 @@ public class QuestionService {
                 .examTypeId(examTypeId)
                 .classId(question.getClassId())
                 .isBank(question.getIsBank())
+                .passage(passageDto)
+                .passageMedia(passageMedia)
                 .answers(answers)
                 .build();
     }
 
     /**
-     * Cập nhật nội dung câu hỏi (và passage). Không đụng tới đáp án.
-     * Dùng QuestionCreateRequest: chỉ ghi đè field khác null (patch). Chỉ user tạo câu được sửa.
+     * Cập nhật câu hỏi (JSON). Đồng bộ đáp án theo {@link AnswerService#syncAnswers}.
      */
     @Transactional
     public QuestionAdminResponse updateQuestion(Long questionId, QuestionCreateRequest request, HttpServletRequest httpRequest) {
+        return updateQuestion(questionId, request, httpRequest, null);
+    }
+
+    /**
+     * Cập nhật câu hỏi; {@code files} (multipart) được append vào {@code passage_media} của passage liên kết.
+     */
+    @Transactional
+    public QuestionAdminResponse updateQuestion(
+            Long questionId,
+            QuestionCreateRequest request,
+            HttpServletRequest httpRequest,
+            Map<String, MultipartFile> files
+    ) {
         Long currentUserId = authUtils.getUserId(httpRequest);
         if (currentUserId == null) {
             throw new RuntimeException("Không xác định được người dùng từ token.");
@@ -585,15 +660,40 @@ public class QuestionService {
             }
         }
 
+        boolean hasNewFiles = files != null
+                && files.values().stream().anyMatch(f -> f != null && !f.isEmpty());
+        if (hasNewFiles) {
+            if (passage == null) {
+                Passage newPassage = new Passage();
+                newPassage.setContent("");
+                Passage.PassageType type = Passage.PassageType.READING;
+                if (request.getPassage() != null && request.getPassage().getPassageType() != null) {
+                    type = request.getPassage().getPassageType();
+                } else {
+                    for (MultipartFile f : files.values()) {
+                        if (f != null && !f.isEmpty() && f.getContentType() != null
+                                && f.getContentType().startsWith("audio")) {
+                            type = Passage.PassageType.LISTENING;
+                            break;
+                        }
+                    }
+                }
+                newPassage.setPassageType(type);
+                passage = passageRepository.save(newPassage);
+                question.setPassageId(passage.getPassageId());
+            }
+            try {
+                appendUploadedFilesToPassage(passage.getPassageId(), files.values());
+            } catch (IOException e) {
+                throw new RuntimeException("Upload file thất bại: " + e.getMessage(), e);
+            }
+            passage = passageRepository.findById(passage.getPassageId()).orElse(passage);
+        }
+
         question = questionRepository.save(question);
         List<Answer> updatedAnswers = answerService.syncAnswers(questionId, request.getAnswers());
 
-        // Bước 4: Chuẩn bị dữ liệu ngoại vi (External Data)
-        Long examTypeId = examPartRepository.findById(question.getExamPartId())
-                .map(ExamPart::getExamTypeId).orElse(null);
-
-        // Bước 5: Trả về kết quả
-        return buildQuestionAdminResponse(question, passage, updatedAnswers, examTypeId);
+        return buildQuestionAdminResponse(question, passage, updatedAnswers);
     }
 
 
@@ -695,8 +795,7 @@ public class QuestionService {
                         buildQuestionAdminResponse(
                                 question,
                                 passage,
-                                savedAnswers,
-                                null
+                                savedAnswers
                         )
                 );
             }

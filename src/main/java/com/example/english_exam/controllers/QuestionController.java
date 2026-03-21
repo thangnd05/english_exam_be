@@ -158,15 +158,33 @@ public class QuestionController {
 
     // =================== UPDATE ===================
 
-    /** Cập nhật nội dung câu hỏi (và passage). Không đụng tới đáp án. Body: QuestionCreateRequest (patch). */
+    /** Cập nhật câu hỏi (JSON). Body: QuestionCreateRequest (patch). */
     @PutMapping(value = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<QuestionAdminResponse> updateQuestion(
             @PathVariable Long id,
-            @Valid @RequestBody QuestionCreateRequest request, // Thêm @Valid
+            @Valid @RequestBody QuestionCreateRequest request,
             HttpServletRequest httpRequest
     ) {
-        // Không cần try-catch ở đây nữa, Exception sẽ được Handle tập trung
         QuestionAdminResponse response = questionService.updateQuestion(id, request, httpRequest);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Cập nhật câu hỏi kèm upload ảnh / audio / tài liệu (multipart).
+     * Part {@code request}: JSON string {@link QuestionCreateRequest}. Các part file: key tùy ý (vd. {@code file0}, {@code audio}).
+     */
+    @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<QuestionAdminResponse> updateQuestionWithFiles(
+            @PathVariable Long id,
+            @RequestPart("request") String requestJson,
+            HttpServletRequest httpRequest
+    ) throws IOException {
+        MultipartHttpServletRequest multipartRequest = (MultipartHttpServletRequest) httpRequest;
+        Map<String, MultipartFile> files = multipartRequest.getFileMap();
+        QuestionCreateRequest request =
+                objectMapper.readValue(requestJson, QuestionCreateRequest.class);
+        QuestionAdminResponse response =
+                questionService.updateQuestion(id, request, httpRequest, files);
         return ResponseEntity.ok(response);
     }
 
