@@ -32,7 +32,7 @@ public interface QuestionRepository extends JpaRepository<Question, Long> {
     @Query(value = "SELECT * FROM questions WHERE exam_part_id = :examPartId AND class_id = :classId ORDER BY RAND() LIMIT 1", nativeQuery = true)
     Question findOneRandomQuestionByClass(@Param("examPartId") Long examPartId, @Param("classId") Long classId);
 
-    @Query("SELECT q FROM Question q WHERE q.examPartId = :examPartId AND q.classId = :classId ORDER BY function('RAND')")
+    @Query("SELECT q FROM Question q WHERE q.examPartId = :examPartId AND q.classId = :classId AND q.isBank = true ORDER BY function('RAND')")
     List<Question> findRandomQuestionsByExamPartIdAndClassId(
             @Param("examPartId") Long examPartId,
             @Param("classId") Long classId,
@@ -42,18 +42,23 @@ public interface QuestionRepository extends JpaRepository<Question, Long> {
     List<Question> findByPassageIdAndClassId(@Param("passageId") Long passageId, @Param("classId") Long classId);
 
 
-    @Query("SELECT q FROM Question q WHERE q.examPartId = :examPartId AND q.classId = :classId")
+    @Query("SELECT q FROM Question q WHERE q.examPartId = :examPartId AND q.classId = :classId AND q.isBank = true")
     List<Question> findByExamPartIdAndClassId(@Param("examPartId") Long examPartId, @Param("classId") Long classId);
 
-    @Query("SELECT q FROM Question q WHERE q.examPartId = :examPartId AND q.classId = :classId AND q.chapterId = :chapterId")
+    @Query("SELECT q FROM Question q WHERE q.examPartId = :examPartId AND q.classId = :classId AND q.chapterId = :chapterId AND q.isBank = true")
     List<Question> findByExamPartIdAndClassIdAndChapterId(
             @Param("examPartId") Long examPartId,
             @Param("classId") Long classId,
             @Param("chapterId") Long chapterId);
 
-    long countByExamPartIdAndClassIdAndChapterId(Long examPartId, Long classId, Long chapterId);
+    @Query("SELECT COUNT(q) FROM Question q WHERE q.examPartId = :examPartId AND q.classId = :classId AND q.chapterId = :chapterId AND q.isBank = true")
+    long countByExamPartIdAndClassIdAndChapterId(
+            @Param("examPartId") Long examPartId,
+            @Param("classId") Long classId,
+            @Param("chapterId") Long chapterId
+    );
 
-    @Query("SELECT COUNT(q) FROM Question q WHERE q.examPartId = :examPartId AND q.classId = :classId")
+    @Query("SELECT COUNT(q) FROM Question q WHERE q.examPartId = :examPartId AND q.classId = :classId AND q.isBank = true")
     long countByExamPartIdAndClassId(@Param("examPartId") Long examPartId,
                                      @Param("classId") Long classId);
 
@@ -63,6 +68,7 @@ public interface QuestionRepository extends JpaRepository<Question, Long> {
         WHERE q.examPartId = :examPartId
           AND q.classId = :classId
           AND q.chapterId = :chapterId
+          AND q.isBank = true
         ORDER BY function('RAND')
     """)
     List<Question> findRandomQuestionsByExamPartIdAndClassIdAndChapterId(
@@ -73,16 +79,17 @@ public interface QuestionRepository extends JpaRepository<Question, Long> {
     );
 
     // ========== Cá nhân theo user đăng nhập (created_by = userId, class_id/chapter_id NULL) ==========
-    List<Question> findByExamPartIdAndCreatedByAndClassIdIsNullAndChapterIdIsNull(
+    List<Question> findByExamPartIdAndCreatedByAndClassIdIsNullAndChapterIdIsNullAndIsBankTrue(
             Long examPartId, Long createdBy);
 
-    long countByExamPartIdAndCreatedByAndClassIdIsNullAndChapterIdIsNull(
+    long countByExamPartIdAndCreatedByAndClassIdIsNullAndChapterIdIsNullAndIsBankTrue(
             Long examPartId, Long createdBy);
 
     @Query(value = """
         SELECT * FROM questions
         WHERE exam_part_id = :examPartId AND created_by = :createdBy
           AND class_id IS NULL AND chapter_id IS NULL
+          AND is_bank = true
         ORDER BY RAND() LIMIT :limit
         """, nativeQuery = true)
     List<Question> findRandomByExamPartAndCreatedByAndClassIdIsNullAndChapterIdIsNull(

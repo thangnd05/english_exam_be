@@ -63,7 +63,7 @@ public class QuestionService {
 
         if (classId == null) {
             return questionRepository
-                    .findByExamPartIdAndCreatedByAndClassIdIsNullAndChapterIdIsNull(
+                    .findByExamPartIdAndCreatedByAndClassIdIsNullAndChapterIdIsNullAndIsBankTrue(
                             examPartId, currentUserId);
         }
 
@@ -141,7 +141,7 @@ public class QuestionService {
             }
             return questionRepository.countByExamPartIdAndClassId(examPartId, classId);
         }
-        return questionRepository.countByExamPartIdAndCreatedByAndClassIdIsNullAndChapterIdIsNull(examPartId, currentUserId);
+        return questionRepository.countByExamPartIdAndCreatedByAndClassIdIsNullAndChapterIdIsNullAndIsBankTrue(examPartId, currentUserId);
     }
 
 
