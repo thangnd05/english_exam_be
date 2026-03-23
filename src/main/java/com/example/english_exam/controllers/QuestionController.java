@@ -1,7 +1,6 @@
 package com.example.english_exam.controllers;
 
 import com.example.english_exam.dto.request.*;
-import com.example.english_exam.dto.response.admin.AnswerAdminResponse;
 import com.example.english_exam.dto.response.admin.QuestionAdminResponse;
 import com.example.english_exam.dto.response.user.QuestionResponse;
 import com.example.english_exam.models.Question;
@@ -67,6 +66,28 @@ public class QuestionController {
             HttpServletRequest request
     ) {
         long count = questionService.countByExamPartId(examPartId, classId, chapterId, request);
+        return ResponseEntity.ok(count);
+    }
+
+    /** Lấy kho câu hỏi theo lớp của user đang login (không cần examPartId). Có thể lọc thêm chapterId. */
+    @GetMapping("/bank/my-class")
+    public ResponseEntity<List<QuestionResponse>> getBankQuestionsByCurrentUserClass(
+            @RequestParam(required = false) Long classId,
+            @RequestParam(required = false) Long chapterId,
+            HttpServletRequest request
+    ) {
+        List<QuestionResponse> questions = questionService.getBankQuestionsByCurrentUserClass(classId, chapterId, request);
+        return ResponseEntity.ok(questions);
+    }
+
+    /** Đếm kho câu hỏi theo lớp của user đang login (không cần examPartId). Có thể lọc thêm chapterId. */
+    @GetMapping("/bank/my-class/count")
+    public ResponseEntity<Long> countBankQuestionsByCurrentUserClass(
+            @RequestParam(required = false) Long classId,
+            @RequestParam(required = false) Long chapterId,
+            HttpServletRequest request
+    ) {
+        long count = questionService.countBankQuestionsByCurrentUserClass(classId, chapterId, request);
         return ResponseEntity.ok(count);
     }
 

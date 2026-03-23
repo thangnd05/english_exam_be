@@ -33,6 +33,8 @@ public class QuestionService {
     private final AuthUtils authUtils;
     private final PassageMediaRepository passageMediaRepository;
     private final AnswerService answerService;
+    private final ClassMemberRepository classMemberRepository;
+    private final ClassRepository classRepository;
 
 
 
@@ -105,6 +107,26 @@ public class QuestionService {
 
         Map<Long, List<AnswerResponse>> answersByQuestionId =
                 answerService.getAnswersForMultipleQuestions(questionIds);
+        Set<Long> passageIds = questions.stream()
+                .map(Question::getPassageId)
+                .filter(Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
+        Map<Long, Passage> passagesById = passageIds.isEmpty()
+                ? Collections.emptyMap()
+                : passageRepository.findAllById(passageIds).stream()
+                .collect(java.util.stream.Collectors.toMap(Passage::getPassageId, p -> p));
+        Map<Long, List<PassageMediaResponse>> mediaByPassageId = new HashMap<>();
+        for (Long passageId : passageIds) {
+            List<PassageMediaResponse> mediaResponses = passageMediaRepository.findByPassageId(passageId).stream()
+                    .map(m -> new PassageMediaResponse(
+                            m.getId(),
+                            m.getPassageId(),
+                            m.getMediaUrl(),
+                            m.getMediaType().name()
+                    ))
+                    .toList();
+            mediaByPassageId.put(passageId, mediaResponses);
+        }
 
         // ===== MAP USING BUILDER =====
         return questions.stream()
@@ -113,6 +135,22 @@ public class QuestionService {
                         .examPartId(q.getExamPartId())
                         .questionText(q.getQuestionText())
                         .questionType(q.getQuestionType())
+                        .isBank(q.getIsBank())
+                        .passage(
+                                q.getPassageId() == null ? null : Optional.ofNullable(passagesById.get(q.getPassageId()))
+                                        .map(p -> new PassageResponse(
+                                                p.getPassageId(),
+                                                p.getContent(),
+                                                p.getMediaUrl(),
+                                                p.getPassageType()
+                                        ))
+                                        .orElse(null)
+                        )
+                        .passageMedia(
+                                q.getPassageId() == null
+                                        ? List.of()
+                                        : mediaByPassageId.getOrDefault(q.getPassageId(), List.of())
+                        )
                         .answers(
                                 answersByQuestionId.getOrDefault(
                                         q.getQuestionId(),
@@ -122,6 +160,124 @@ public class QuestionService {
                         .build()
                 )
                 .toList();
+    }
+
+    private Set<Long> getAccessibleClassIds(Long currentUserId) {
+        Set<Long> classIds = new LinkedHashSet<>();
+        classMemberRepository.findByUserIdAndStatus(currentUserId, ClassMember.MemberStatus.APPROVED)
+                .forEach(member -> classIds.add(member.getClassId()));
+        classRepository.findByTeacherId(currentUserId)
+                .forEach(clazz -> classIds.add(clazz.getClassId()));
+        return classIds;
+    }
+
+    private Long resolveCurrentUserClassId(Long currentUserId, Long requestedClassId) {
+        Set<Long> classIds = getAccessibleClassIds(currentUserId);
+        if (classIds.isEmpty()) {
+            throw new RuntimeException("Bạn chưa thuộc lớp nào.");
+        }
+
+        if (requestedClassId != null) {
+            if (!classIds.contains(requestedClassId)) {
+                throw new RuntimeException("Bạn không có quyền truy cập lớp: " + requestedClassId);
+            }
+            return requestedClassId;
+        }
+
+        if (classIds.size() > 1) {
+            throw new RuntimeException("Tài khoản thuộc nhiều lớp. Vui lòng truyền classId.");
+        }
+        return classIds.iterator().next();
+    }
+
+    public List<QuestionResponse> getBankQuestionsByCurrentUserClass(
+            Long classId,
+            Long chapterId,
+            HttpServletRequest request
+    ) {
+        Long currentUserId = authUtils.getUserId(request);
+        Long resolvedClassId = resolveCurrentUserClassId(currentUserId, classId);
+
+        List<Question> questions = (chapterId != null)
+                ? questionRepository.findByClassIdAndChapterIdAndCreatedByAndIsBankTrue(resolvedClassId, chapterId, currentUserId)
+                : questionRepository.findByClassIdAndCreatedByAndIsBankTrue(resolvedClassId, currentUserId);
+
+        if (questions.isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> questionIds = questions.stream()
+                .map(Question::getQuestionId)
+                .toList();
+
+        Map<Long, List<AnswerResponse>> answersByQuestionId =
+                answerService.getAnswersForMultipleQuestions(questionIds);
+        Set<Long> passageIds = questions.stream()
+                .map(Question::getPassageId)
+                .filter(Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
+        Map<Long, Passage> passagesById = passageIds.isEmpty()
+                ? Collections.emptyMap()
+                : passageRepository.findAllById(passageIds).stream()
+                .collect(java.util.stream.Collectors.toMap(Passage::getPassageId, p -> p));
+        Map<Long, List<PassageMediaResponse>> mediaByPassageId = new HashMap<>();
+        for (Long passageId : passageIds) {
+            List<PassageMediaResponse> mediaResponses = passageMediaRepository.findByPassageId(passageId).stream()
+                    .map(m -> new PassageMediaResponse(
+                            m.getId(),
+                            m.getPassageId(),
+                            m.getMediaUrl(),
+                            m.getMediaType().name()
+                    ))
+                    .toList();
+            mediaByPassageId.put(passageId, mediaResponses);
+        }
+
+        return questions.stream()
+                .map(q -> QuestionResponse.builder()
+                        .questionId(q.getQuestionId())
+                        .examPartId(q.getExamPartId())
+                        .questionText(q.getQuestionText())
+                        .questionType(q.getQuestionType())
+                        .isBank(q.getIsBank())
+                        .passage(
+                                q.getPassageId() == null ? null : Optional.ofNullable(passagesById.get(q.getPassageId()))
+                                        .map(p -> new PassageResponse(
+                                                p.getPassageId(),
+                                                p.getContent(),
+                                                p.getMediaUrl(),
+                                                p.getPassageType()
+                                        ))
+                                        .orElse(null)
+                        )
+                        .passageMedia(
+                                q.getPassageId() == null
+                                        ? List.of()
+                                        : mediaByPassageId.getOrDefault(q.getPassageId(), List.of())
+                        )
+                        .answers(
+                                answersByQuestionId.getOrDefault(
+                                        q.getQuestionId(),
+                                        Collections.emptyList()
+                                )
+                        )
+                        .build()
+                )
+                .toList();
+    }
+
+    public long countBankQuestionsByCurrentUserClass(
+            Long classId,
+            Long chapterId,
+            HttpServletRequest request
+    ) {
+        Long currentUserId = authUtils.getUserId(request);
+        Long resolvedClassId = resolveCurrentUserClassId(currentUserId, classId);
+
+        if (chapterId != null) {
+            return questionRepository.countByClassIdAndChapterIdAndCreatedByAndIsBankTrue(resolvedClassId, chapterId, currentUserId);
+        }
+        return questionRepository.countByClassIdAndCreatedByAndIsBankTrue(resolvedClassId, currentUserId);
     }
 
 

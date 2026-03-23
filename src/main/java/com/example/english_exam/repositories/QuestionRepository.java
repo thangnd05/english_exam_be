@@ -41,6 +41,15 @@ public interface QuestionRepository extends JpaRepository<Question, Long> {
     @Query("SELECT q FROM Question q WHERE q.passageId = :passageId AND q.classId = :classId")
     List<Question> findByPassageIdAndClassId(@Param("passageId") Long passageId, @Param("classId") Long classId);
 
+    // ========== Kho theo lớp/chapter, KHÔNG cần examPartId ==========
+    List<Question> findByClassIdAndCreatedByAndIsBankTrue(Long classId, Long createdBy);
+
+    List<Question> findByClassIdAndChapterIdAndCreatedByAndIsBankTrue(Long classId, Long chapterId, Long createdBy);
+
+    long countByClassIdAndCreatedByAndIsBankTrue(Long classId, Long createdBy);
+
+    long countByClassIdAndChapterIdAndCreatedByAndIsBankTrue(Long classId, Long chapterId, Long createdBy);
+
 
     @Query("SELECT q FROM Question q WHERE q.examPartId = :examPartId AND q.classId = :classId AND q.isBank = true")
     List<Question> findByExamPartIdAndClassId(@Param("examPartId") Long examPartId, @Param("classId") Long classId);

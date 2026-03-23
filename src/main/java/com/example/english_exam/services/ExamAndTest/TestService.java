@@ -260,6 +260,7 @@ public class TestService {
                         .examPartId(q.getExamPartId())
                         .questionText(q.getQuestionText())
                         .questionType(q.getQuestionType())
+                        .isBank(q.getIsBank())
                         .testPartId(tp.getTestPartId())
                         .answers(answers)
                         .build();
