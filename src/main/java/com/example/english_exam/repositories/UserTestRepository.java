@@ -13,6 +13,8 @@ import java.util.Optional;
 public interface UserTestRepository extends JpaRepository<UserTest, Long> {
     List<UserTest> findByUserId(Long userId);
     List<UserTest> findByTestId(Long testId);
+    long countByUserId(Long userId);
+    long countByUserIdAndStatus(Long userId, UserTest.Status status);
 
     int countByUserIdAndTestIdAndStatus(Long userId, Long testId, UserTest.Status status);
 
@@ -25,7 +27,12 @@ public interface UserTestRepository extends JpaRepository<UserTest, Long> {
 
 
     Optional<UserTest> findTopByUserIdAndTestIdOrderByStartedAtDesc(Long userId, Long testId);
+    Optional<UserTest> findTopByUserIdOrderByStartedAtDesc(Long userId);
+    Optional<UserTest> findTopByUserIdAndStatusOrderByTotalScoreDesc(Long userId, UserTest.Status status);
 
     long countByTestIdAndUserId(Long testId, Long userId);
+
+    @Query("SELECT AVG(ut.totalScore) FROM UserTest ut WHERE ut.userId = :userId AND ut.status = :status")
+    Double findAverageScoreByUserIdAndStatus(@Param("userId") Long userId, @Param("status") UserTest.Status status);
 
 }

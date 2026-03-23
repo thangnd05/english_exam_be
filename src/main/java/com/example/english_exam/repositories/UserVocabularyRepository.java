@@ -13,6 +13,8 @@ import java.util.Optional;
 @Repository
 public interface UserVocabularyRepository extends JpaRepository<UserVocabulary, Long> {
     Optional<UserVocabulary> findByUserIdAndVocabId(Long userId, Long vocabId);
+    long countByUserId(Long userId);
+    long countByUserIdAndStatus(Long userId, UserVocabulary.Status status);
 
     @Query("SELECT uv FROM UserVocabulary uv " +
             "JOIN Vocabulary v ON uv.vocabId = v.vocabId " +

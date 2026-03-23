@@ -1,8 +1,10 @@
 package com.example.english_exam.controllers;
 
+import com.example.english_exam.dto.response.ProfileOverviewResponse;
 import com.example.english_exam.models.User;
 import com.example.english_exam.services.UserService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.AllArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -31,6 +33,11 @@ public class UserController {
         return userService.findById(id)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    @GetMapping("/me/profile-overview")
+    public ResponseEntity<ProfileOverviewResponse> getMyProfileOverview(HttpServletRequest httpRequest) {
+        return ResponseEntity.ok(userService.getMyProfileOverview(httpRequest));
     }
 
     // Tạo mới user
