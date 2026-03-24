@@ -40,7 +40,7 @@ public class ChapterController {
         return ResponseEntity.ok(chapterService.getById(chapterId));
     }
 
-    @PatchMapping("/{chapterId}")
+    @PutMapping("/{chapterId}")
     public ResponseEntity<ChapterResponse> update(
             HttpServletRequest requestHttp,
             @PathVariable Long chapterId,
