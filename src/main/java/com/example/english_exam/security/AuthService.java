@@ -1,15 +1,22 @@
 package com.example.english_exam.security;
 
 import com.example.english_exam.dto.auth.UserTokenInfo;
+import com.example.english_exam.dto.request.ChangePasswordRequest;
+import com.example.english_exam.dto.request.ForgotPasswordRequest;
 import com.example.english_exam.dto.request.RegisterRequest;
+import com.example.english_exam.dto.request.ResetPasswordRequest;
+import com.example.english_exam.dto.response.AuthMessageResponse;
 import com.example.english_exam.dto.response.UserResponse;
+import com.example.english_exam.models.PasswordResetToken;
 import com.example.english_exam.models.Role;
 import com.example.english_exam.models.User;
 import com.example.english_exam.repositories.EmailVerificationRepository;
+import com.example.english_exam.repositories.PasswordResetTokenRepository;
 import com.example.english_exam.repositories.RoleRepository;
 import com.example.english_exam.repositories.UserRepository;
 import com.example.english_exam.config.CustomUserDetailsService;
 import com.example.english_exam.services.EmailVerificationService;
+import com.example.english_exam.util.EmailUtil;
 import io.jsonwebtoken.Claims;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -38,6 +45,8 @@ public class AuthService {
     private final RoleRepository roleRepository;
     private final EmailVerificationService emailVerificationService;
     private final EmailVerificationRepository emailVerificationRepository; // ✅ thêm dòng này
+    private final PasswordResetTokenRepository passwordResetTokenRepository;
+    private final EmailUtil emailUtil;
 
 
 
@@ -248,6 +257,86 @@ public class AuthService {
 
         } catch (Exception e) {
             throw new RuntimeException("❌ Failed to extract user info: " + e.getMessage());
+        }
+    }
+
+    public AuthMessageResponse forgotPassword(ForgotPasswordRequest request) {
+        Optional<User> userOptional = userRepository.findByEmail(request.getEmail());
+        if (userOptional.isEmpty()) {
+            return new AuthMessageResponse("Nếu email tồn tại, chúng tôi đã gửi liên kết đặt lại mật khẩu.");
+        }
+
+        User user = userOptional.get();
+        passwordResetTokenRepository.deleteByUserId(user.getUserId());
+
+        String token = UUID.randomUUID().toString();
+        PasswordResetToken resetToken = new PasswordResetToken();
+        resetToken.setUserId(user.getUserId());
+        resetToken.setToken(token);
+        resetToken.setExpiresAt(LocalDateTime.now().plusMinutes(30));
+        resetToken.setUsed(false);
+        passwordResetTokenRepository.save(resetToken);
+
+        emailUtil.sendResetPasswordEmail(user.getEmail(), token);
+        return new AuthMessageResponse("Nếu email tồn tại, chúng tôi đã gửi liên kết đặt lại mật khẩu.");
+    }
+
+    public AuthMessageResponse resetPassword(ResetPasswordRequest request) {
+        validateNewPassword(request.getNewPassword(), request.getConfirmNewPassword());
+
+        PasswordResetToken resetToken = passwordResetTokenRepository.findByToken(request.getToken())
+                .orElseThrow(() -> new RuntimeException("Token đặt lại mật khẩu không hợp lệ"));
+
+        if (Boolean.TRUE.equals(resetToken.getUsed())) {
+            throw new RuntimeException("Token đã được sử dụng");
+        }
+
+        if (resetToken.getExpiresAt().isBefore(LocalDateTime.now())) {
+            throw new RuntimeException("Token đã hết hạn");
+        }
+
+        User user = userRepository.findById(resetToken.getUserId())
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng"));
+
+        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        userRepository.save(user);
+
+        resetToken.setUsed(true);
+        passwordResetTokenRepository.save(resetToken);
+
+        return new AuthMessageResponse("Đặt lại mật khẩu thành công");
+    }
+
+    public AuthMessageResponse changePassword(ChangePasswordRequest request,
+                                              HttpServletRequest httpRequest,
+                                              HttpServletResponse httpResponse) {
+        validateNewPassword(request.getNewPassword(), request.getConfirmNewPassword());
+
+        Long userId = getCurrentUserInfo(httpRequest).getUserId();
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng"));
+
+        if (!passwordEncoder.matches(request.getOldPassword(), user.getPassword())) {
+            throw new RuntimeException("Mật khẩu cũ không chính xác");
+        }
+
+        if (passwordEncoder.matches(request.getNewPassword(), user.getPassword())) {
+            throw new RuntimeException("Mật khẩu mới không được trùng mật khẩu cũ");
+        }
+
+        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        userRepository.save(user);
+
+        logout(httpResponse);
+        return new AuthMessageResponse("Đổi mật khẩu thành công, vui lòng đăng nhập lại");
+    }
+
+    private void validateNewPassword(String newPassword, String confirmNewPassword) {
+        if (!Objects.equals(newPassword, confirmNewPassword)) {
+            throw new RuntimeException("Xác nhận mật khẩu mới không khớp");
+        }
+        if (newPassword.length() < 6) {
+            throw new RuntimeException("Mật khẩu mới phải có ít nhất 6 ký tự");
         }
     }
 

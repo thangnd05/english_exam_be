@@ -1,7 +1,11 @@
 package com.example.english_exam.controllers;
 
+import com.example.english_exam.dto.request.ChangePasswordRequest;
+import com.example.english_exam.dto.request.ForgotPasswordRequest;
 import com.example.english_exam.dto.request.LoginRequest;
 import com.example.english_exam.dto.request.RegisterRequest;
+import com.example.english_exam.dto.request.ResetPasswordRequest;
+import com.example.english_exam.dto.response.AuthMessageResponse;
 import com.example.english_exam.dto.response.UserResponse;
 import com.example.english_exam.security.AuthService;
 import com.example.english_exam.services.EmailVerificationService;
@@ -41,6 +45,23 @@ public class AuthController {
                     .status(HttpStatus.BAD_REQUEST)
                     .body(Map.of("message", e.getMessage()));
         }
+    }
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<AuthMessageResponse> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        return ResponseEntity.ok(authService.forgotPassword(request));
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<AuthMessageResponse> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        return ResponseEntity.ok(authService.resetPassword(request));
+    }
+
+    @PostMapping("/change-password")
+    public ResponseEntity<AuthMessageResponse> changePassword(@Valid @RequestBody ChangePasswordRequest request,
+                                                              HttpServletRequest httpRequest,
+                                                              HttpServletResponse httpResponse) {
+        return ResponseEntity.ok(authService.changePassword(request, httpRequest, httpResponse));
     }
 
 

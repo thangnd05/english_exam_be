@@ -76,6 +76,8 @@ public class SecurityConfig {
                                 "/api/auth/refresh",
                                 "/api/auth/verify",
                                 "/api/auth/logout",
+                                "/api/auth/forgot-password",
+                                "/api/auth/reset-password",
                                 "/oauth2/**",
                                 "/api/exam-types/**",
                                 "/api/tests/**",
