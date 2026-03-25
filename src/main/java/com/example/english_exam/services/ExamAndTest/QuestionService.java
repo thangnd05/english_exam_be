@@ -80,6 +80,100 @@ public class QuestionService {
                         examPartId, classId);
     }
 
+    private Map<Long, Passage> loadPassagesById(List<Question> questions) {
+        Set<Long> passageIds = questions.stream()
+                .map(Question::getPassageId)
+                .filter(Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
+
+        if (passageIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        return passageRepository.findAllById(passageIds).stream()
+                .collect(java.util.stream.Collectors.toMap(Passage::getPassageId, p -> p));
+    }
+
+    private Map<Long, List<PassageMediaResponse>> loadMediaByPassageId(Set<Long> passageIds) {
+        if (passageIds == null || passageIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        Map<Long, List<PassageMediaResponse>> mediaByPassageId = new HashMap<>();
+        for (Long passageId : passageIds) {
+            List<PassageMediaResponse> mediaResponses = passageMediaRepository.findByPassageId(passageId).stream()
+                    .map(m -> new PassageMediaResponse(
+                            m.getId(),
+                            m.getPassageId(),
+                            m.getMediaUrl(),
+                            m.getMediaType().name()
+                    ))
+                    .toList();
+            mediaByPassageId.put(passageId, mediaResponses);
+        }
+        return mediaByPassageId;
+    }
+
+    private QuestionResponse toUserQuestionResponse(
+            Question question,
+            Map<Long, Passage> passagesById,
+            Map<Long, List<PassageMediaResponse>> mediaByPassageId,
+            Map<Long, List<AnswerResponse>> answersByQuestionId
+    ) {
+        PassageResponse passageResponse = null;
+        if (question.getPassageId() != null) {
+            Passage passage = passagesById.get(question.getPassageId());
+            if (passage != null) {
+                passageResponse = new PassageResponse(
+                        passage.getPassageId(),
+                        passage.getContent(),
+                        passage.getMediaUrl(),
+                        passage.getPassageType()
+                );
+            }
+        }
+
+        List<PassageMediaResponse> passageMedia = question.getPassageId() == null
+                ? List.of()
+                : mediaByPassageId.getOrDefault(question.getPassageId(), List.of());
+
+        List<AnswerResponse> answers = answersByQuestionId.getOrDefault(
+                question.getQuestionId(),
+                Collections.emptyList()
+        );
+
+        return QuestionResponse.builder()
+                .questionId(question.getQuestionId())
+                .examPartId(question.getExamPartId())
+                .questionText(question.getQuestionText())
+                .questionType(question.getQuestionType())
+                .isBank(question.getIsBank())
+                .passage(passageResponse)
+                .passageMedia(passageMedia)
+                .answers(answers)
+                .build();
+    }
+
+    private List<QuestionResponse> buildUserQuestionResponses(List<Question> questions) {
+        if (questions == null || questions.isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> questionIds = questions.stream()
+                .map(Question::getQuestionId)
+                .toList();
+        Map<Long, List<AnswerResponse>> answersByQuestionId =
+                answerService.getAnswersForMultipleQuestions(questionIds);
+
+        Map<Long, Passage> passagesById = loadPassagesById(questions);
+        Set<Long> passageIds = passagesById.keySet();
+        Map<Long, List<PassageMediaResponse>> mediaByPassageId = loadMediaByPassageId(passageIds);
+
+        return questions.stream()
+                .map(q -> toUserQuestionResponse(q, passagesById, mediaByPassageId, answersByQuestionId))
+                .toList();
+    }
+
     public List<QuestionResponse> getQuestionsByPart(
             Long examPartId,
             Long classId,
@@ -100,66 +194,7 @@ public class QuestionService {
             return Collections.emptyList();
         }
 
-        // ===== BULK LOAD ANSWERS (FIX N+1) =====
-        List<Long> questionIds = questions.stream()
-                .map(Question::getQuestionId)
-                .toList();
-
-        Map<Long, List<AnswerResponse>> answersByQuestionId =
-                answerService.getAnswersForMultipleQuestions(questionIds);
-        Set<Long> passageIds = questions.stream()
-                .map(Question::getPassageId)
-                .filter(Objects::nonNull)
-                .collect(java.util.stream.Collectors.toSet());
-        Map<Long, Passage> passagesById = passageIds.isEmpty()
-                ? Collections.emptyMap()
-                : passageRepository.findAllById(passageIds).stream()
-                .collect(java.util.stream.Collectors.toMap(Passage::getPassageId, p -> p));
-        Map<Long, List<PassageMediaResponse>> mediaByPassageId = new HashMap<>();
-        for (Long passageId : passageIds) {
-            List<PassageMediaResponse> mediaResponses = passageMediaRepository.findByPassageId(passageId).stream()
-                    .map(m -> new PassageMediaResponse(
-                            m.getId(),
-                            m.getPassageId(),
-                            m.getMediaUrl(),
-                            m.getMediaType().name()
-                    ))
-                    .toList();
-            mediaByPassageId.put(passageId, mediaResponses);
-        }
-
-        // ===== MAP USING BUILDER =====
-        return questions.stream()
-                .map(q -> QuestionResponse.builder()
-                        .questionId(q.getQuestionId())
-                        .examPartId(q.getExamPartId())
-                        .questionText(q.getQuestionText())
-                        .questionType(q.getQuestionType())
-                        .isBank(q.getIsBank())
-                        .passage(
-                                q.getPassageId() == null ? null : Optional.ofNullable(passagesById.get(q.getPassageId()))
-                                        .map(p -> new PassageResponse(
-                                                p.getPassageId(),
-                                                p.getContent(),
-                                                p.getMediaUrl(),
-                                                p.getPassageType()
-                                        ))
-                                        .orElse(null)
-                        )
-                        .passageMedia(
-                                q.getPassageId() == null
-                                        ? List.of()
-                                        : mediaByPassageId.getOrDefault(q.getPassageId(), List.of())
-                        )
-                        .answers(
-                                answersByQuestionId.getOrDefault(
-                                        q.getQuestionId(),
-                                        Collections.emptyList()
-                                )
-                        )
-                        .build()
-                )
-                .toList();
+        return buildUserQuestionResponses(questions);
     }
 
     private Set<Long> getAccessibleClassIds(Long currentUserId) {
@@ -206,64 +241,7 @@ public class QuestionService {
             return List.of();
         }
 
-        List<Long> questionIds = questions.stream()
-                .map(Question::getQuestionId)
-                .toList();
-
-        Map<Long, List<AnswerResponse>> answersByQuestionId =
-                answerService.getAnswersForMultipleQuestions(questionIds);
-        Set<Long> passageIds = questions.stream()
-                .map(Question::getPassageId)
-                .filter(Objects::nonNull)
-                .collect(java.util.stream.Collectors.toSet());
-        Map<Long, Passage> passagesById = passageIds.isEmpty()
-                ? Collections.emptyMap()
-                : passageRepository.findAllById(passageIds).stream()
-                .collect(java.util.stream.Collectors.toMap(Passage::getPassageId, p -> p));
-        Map<Long, List<PassageMediaResponse>> mediaByPassageId = new HashMap<>();
-        for (Long passageId : passageIds) {
-            List<PassageMediaResponse> mediaResponses = passageMediaRepository.findByPassageId(passageId).stream()
-                    .map(m -> new PassageMediaResponse(
-                            m.getId(),
-                            m.getPassageId(),
-                            m.getMediaUrl(),
-                            m.getMediaType().name()
-                    ))
-                    .toList();
-            mediaByPassageId.put(passageId, mediaResponses);
-        }
-
-        return questions.stream()
-                .map(q -> QuestionResponse.builder()
-                        .questionId(q.getQuestionId())
-                        .examPartId(q.getExamPartId())
-                        .questionText(q.getQuestionText())
-                        .questionType(q.getQuestionType())
-                        .isBank(q.getIsBank())
-                        .passage(
-                                q.getPassageId() == null ? null : Optional.ofNullable(passagesById.get(q.getPassageId()))
-                                        .map(p -> new PassageResponse(
-                                                p.getPassageId(),
-                                                p.getContent(),
-                                                p.getMediaUrl(),
-                                                p.getPassageType()
-                                        ))
-                                        .orElse(null)
-                        )
-                        .passageMedia(
-                                q.getPassageId() == null
-                                        ? List.of()
-                                        : mediaByPassageId.getOrDefault(q.getPassageId(), List.of())
-                        )
-                        .answers(
-                                answersByQuestionId.getOrDefault(
-                                        q.getQuestionId(),
-                                        Collections.emptyList()
-                                )
-                        )
-                        .build()
-                )
-                .toList();
+        return buildUserQuestionResponses(questions);
     }
 
     public long countBankQuestionsByCurrentUserClass(
