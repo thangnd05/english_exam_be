@@ -1,6 +1,5 @@
 package com.example.english_exam.dto.response.user;
 
-import com.example.english_exam.models.Test;
 import lombok.*;
 
 import java.time.LocalDateTime;
@@ -24,6 +23,7 @@ public class TestResponse {
     private Integer maxAttempts;
     private Integer attemptsUsed;
     private Integer remainingAttempts;
+    private Long totalAttempts;
     private Boolean canDoTest;
     private List<TestPartResponse> parts;
 

@@ -13,6 +13,7 @@ import java.util.Optional;
 public interface UserTestRepository extends JpaRepository<UserTest, Long> {
     List<UserTest> findByUserId(Long userId);
     List<UserTest> findByTestId(Long testId);
+    long countByTestId(Long testId);
     long countByUserId(Long userId);
     long countByUserIdAndStatus(Long userId, UserTest.Status status);
 

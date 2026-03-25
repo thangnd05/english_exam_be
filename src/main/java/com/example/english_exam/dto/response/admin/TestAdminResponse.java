@@ -21,6 +21,7 @@ public class TestAdminResponse {
     private LocalDateTime availableTo;
     private String status;
     private Integer maxAttempts;
+    private Long totalAttempts;
 
     private Long classId;
 

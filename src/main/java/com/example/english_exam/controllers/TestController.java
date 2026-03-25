@@ -9,7 +9,6 @@ import com.example.english_exam.dto.response.user.TestResponse;
 import com.example.english_exam.models.Test;
 import com.example.english_exam.services.ExamAndTest.TestService;
 import com.example.english_exam.util.AuthUtils;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.AllArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -26,7 +25,6 @@ import java.util.Map;
 public class TestController {
 
     private final TestService testService;
-    private final ObjectMapper objectMapper; // <-- 1. Khai báo một field final
     private final AuthUtils authUtils;
 
 
@@ -158,7 +156,7 @@ public class TestController {
 
     // Lấy test theo userId cụ thể
     @GetMapping("/user/{userId}")
-    public List<Test> getTestsByUser(@PathVariable Long userId) {
+    public List<TestAdminResponse> getTestsByUser(@PathVariable Long userId) {
         return testService.getTestsByUser(userId);
     }
 

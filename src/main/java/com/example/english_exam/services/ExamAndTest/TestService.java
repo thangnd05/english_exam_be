@@ -1,6 +1,5 @@
 package com.example.english_exam.services.ExamAndTest;
 
-import com.example.english_exam.cloudinary.CloudinaryService;
 import com.example.english_exam.dto.request.AddQuestionsToTestRequest;
 import com.example.english_exam.dto.request.AddRandomQuestionsToTestRequest;
 import com.example.english_exam.dto.request.CreateTestRequest;
@@ -41,10 +40,6 @@ public class TestService {
     private final ClassRepository classRepository;
     private final ClassMemberRepository classMemberRepository;
 
-
-    private LocalDateTime parseDate(String input) {
-        return (input == null || input.isEmpty()) ? null : LocalDateTime.parse(input);
-    }
 
     public List<Test> getAllTests() {
         return testRepository.findAll();
@@ -91,6 +86,7 @@ public class TestService {
                         test.getTestId(),
                         userId
                 );
+        long totalAttempts = userTestRepository.countByTestId(test.getTestId());
 
         Integer maxAttempts = test.getMaxAttempts();
         Integer remainingAttempts = null;
@@ -116,6 +112,7 @@ public class TestService {
                 .maxAttempts(maxAttempts)                // giữ nguyên null
                 .attemptsUsed((int) attemptsUsed)
                 .remainingAttempts(remainingAttempts)   // null nếu không giới hạn
+                .totalAttempts(totalAttempts)
                 .canDoTest(canDoTest)                   // luôn true nếu null
                 .parts(null)
                 .build();
@@ -137,8 +134,45 @@ public class TestService {
         return result;
     }
 
-    public List<Test> getTestsByUser(Long userId) {
-        return testRepository.findByCreatedBy(userId);
+    private TestAdminResponse buildAdminTestSummary(Test test) {
+        long totalAttempts = userTestRepository.countByTestId(test.getTestId());
+
+        return TestAdminResponse.builder()
+                .testId(test.getTestId())
+                .title(test.getTitle())
+                .description(test.getDescription())
+                .examTypeId(test.getExamTypeId())
+                .createdBy(test.getCreatedBy())
+                .createdAt(test.getCreatedAt())
+                .bannerUrl(test.getBannerUrl())
+                .durationMinutes(test.getDurationMinutes())
+                .availableFrom(test.getAvailableFrom())
+                .availableTo(test.getAvailableTo())
+                .status(test.calculateStatus().name())
+                .maxAttempts(test.getMaxAttempts())
+                .totalAttempts(totalAttempts)
+                .classId(test.getClassId())
+                .parts(null)
+                .build();
+    }
+
+    public List<TestAdminResponse> getTestsByUser(Long userId) {
+        if (userId == null) {
+            return List.of();
+        }
+        return testRepository.findByCreatedBy(userId).stream()
+                .map(this::buildAdminTestSummary)
+                .toList();
+    }
+
+    public List<TestResponse> getTestsByUser(HttpServletRequest httpRequest) {
+        Long currentUserId = authUtils.getUserId(httpRequest);
+        if (currentUserId == null) {
+            throw new RuntimeException("Không xác định được người dùng.");
+        }
+        return testRepository.findByCreatedBy(currentUserId).stream()
+                .map(test -> buildUserTestSummary(test, currentUserId))
+                .toList();
     }
 
     @Transactional
@@ -151,6 +185,7 @@ public class TestService {
 
         Test test = testRepository.findById(testId)
                 .orElseThrow(() -> new RuntimeException("Test not found"));
+        long totalAttempts = userTestRepository.countByTestId(testId);
 
         // ================= AUTO SUBMIT IF TIME EXPIRED =================
         UserTest latest = userTestRepository
@@ -210,6 +245,7 @@ public class TestService {
                     .maxAttempts(maxAttempts)
                     .attemptsUsed(attemptsUsed)
                     .remainingAttempts(remaining)
+                    .totalAttempts(totalAttempts)
                     .canDoTest(false)
                     .parts(null)
                     .build();
@@ -304,6 +340,7 @@ public class TestService {
                 .maxAttempts(maxAttempts)
                 .attemptsUsed(attemptsUsed)
                 .remainingAttempts(remaining)
+                .totalAttempts(totalAttempts)
                 .canDoTest(true)
                 .parts(partResponses)
                 .build();
@@ -313,12 +350,26 @@ public class TestService {
 
     // Hàm bổ trợ để build response trống
     private TestResponse buildEmptyTestResponse(Test test, Integer maxAttempts, int attemptsUsed, Integer remaining) {
-        return new TestResponse(
-                test.getTestId(), test.getTitle(), test.getDescription(), test.getExamTypeId(),
-                test.getCreatedBy(), test.getCreatedAt(), test.getBannerUrl(), test.getDurationMinutes(),
-                test.getAvailableFrom(), test.getAvailableTo(), test.calculateStatus().name(),
-                maxAttempts, attemptsUsed, remaining, true, Collections.emptyList()
-        );
+        long totalAttempts = userTestRepository.countByTestId(test.getTestId());
+        return TestResponse.builder()
+                .testId(test.getTestId())
+                .title(test.getTitle())
+                .description(test.getDescription())
+                .examTypeId(test.getExamTypeId())
+                .createdBy(test.getCreatedBy())
+                .createdAt(test.getCreatedAt())
+                .bannerUrl(test.getBannerUrl())
+                .durationMinutes(test.getDurationMinutes())
+                .availableFrom(test.getAvailableFrom())
+                .availableTo(test.getAvailableTo())
+                .status(test.calculateStatus().name())
+                .maxAttempts(maxAttempts)
+                .attemptsUsed(attemptsUsed)
+                .remainingAttempts(remaining)
+                .totalAttempts(totalAttempts)
+                .canDoTest(true)
+                .parts(Collections.emptyList())
+                .build();
     }
 
 
@@ -327,6 +378,7 @@ public class TestService {
         // ===== 1. LẤY TEST =====
         Test test = testRepository.findById(testId)
                 .orElseThrow(() -> new RuntimeException("Test not found"));
+        long totalAttempts = userTestRepository.countByTestId(testId);
 
         // ===== 2. LẤY TEST PARTS =====
         List<TestPart> testParts = testPartRepository.findByTestId(test.getTestId());
@@ -345,6 +397,7 @@ public class TestService {
                     .availableTo(test.getAvailableTo())
                     .status(test.calculateStatus().name())
                     .maxAttempts(test.getMaxAttempts())
+                    .totalAttempts(totalAttempts)
                     .classId(test.getClassId())
                     .parts(Collections.emptyList())
                     .build();
@@ -511,6 +564,7 @@ public class TestService {
                 .availableTo(test.getAvailableTo())
                 .status(test.calculateStatus().name())
                 .maxAttempts(test.getMaxAttempts())
+                .totalAttempts(totalAttempts)
                 .classId(test.getClassId())
                 .parts(partResponses)
                 .build();
