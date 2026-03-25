@@ -2,14 +2,9 @@ package com.example.english_exam.services;
 
 import com.example.english_exam.cloudinary.CloudinaryService;
 import com.example.english_exam.dto.response.ProfileOverviewResponse;
-import com.example.english_exam.models.ClassMember;
-import com.example.english_exam.models.User;
-import com.example.english_exam.models.UserTest;
-import com.example.english_exam.models.UserVocabulary;
-import com.example.english_exam.repositories.ClassMemberRepository;
-import com.example.english_exam.repositories.UserRepository;
-import com.example.english_exam.repositories.UserTestRepository;
-import com.example.english_exam.repositories.UserVocabularyRepository;
+import com.example.english_exam.dto.response.UserResponse;
+import com.example.english_exam.models.*;
+import com.example.english_exam.repositories.*;
 import com.example.english_exam.util.AuthUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.AllArgsConstructor;
@@ -31,6 +26,7 @@ public class UserService {
     private UserVocabularyRepository userVocabularyRepository;
     private ClassMemberRepository classMemberRepository;
     private AuthUtils authUtils;
+    private RoleRepository roleRepository;
 
 
     public List<User> findAll() {
@@ -86,6 +82,9 @@ public class UserService {
         long completedAttempts = userTestRepository.countByUserIdAndStatus(id, UserTest.Status.COMPLETED);
         long inProgressAttempts = userTestRepository.countByUserIdAndStatus(id, UserTest.Status.IN_PROGRESS);
 
+        Optional<Role> role = roleRepository.findByRoleId(user.getRoleId());
+        String roleName = role.get().getRoleName();
+
         Integer bestScore = userTestRepository.findTopByUserIdAndStatusOrderByTotalScoreDesc(id, UserTest.Status.COMPLETED)
                 .map(UserTest::getTotalScore)
                 .orElse(0);
@@ -110,6 +109,7 @@ public class UserService {
                 .avatarUrl(user.getAvatarUrl())
                 .verified(user.getVerified())
                 .roleId(user.getRoleId())
+                .roleName(roleName)
                 .createdAt(user.getCreatedAt())
                 .testStats(ProfileOverviewResponse.TestStats.builder()
                         .totalAttempts(totalAttempts)
@@ -134,6 +134,11 @@ public class UserService {
     public ProfileOverviewResponse getMyProfileOverview(HttpServletRequest httpRequest) {
         Long userId = authUtils.getUserId(httpRequest);
         return getProfileOverview(userId);
+    }
+
+    public Optional<User> getUserCurrent(HttpServletRequest httpRequest) {
+        Long userId = authUtils.getUserId(httpRequest);
+        return userRepository.findById(userId);
     }
 
 

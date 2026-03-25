@@ -13,6 +13,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/users")
@@ -33,6 +34,11 @@ public class UserController {
         return userService.findById(id)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    @GetMapping("/me/info-user")
+    public ResponseEntity<Optional<User>> getUserInfo(HttpServletRequest httpRequest) {
+        return ResponseEntity.ok(userService.getUserCurrent(httpRequest));
     }
 
     @GetMapping("/me/profile-overview")

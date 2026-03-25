@@ -15,6 +15,7 @@ public class ProfileOverviewResponse {
     private String avatarUrl;
     private Boolean verified;
     private Long roleId;
+    private String roleName;
     private LocalDateTime createdAt;
     private TestStats testStats;
     private VocabularyStats vocabularyStats;
