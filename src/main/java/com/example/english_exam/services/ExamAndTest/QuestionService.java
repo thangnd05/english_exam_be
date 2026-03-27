@@ -19,6 +19,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @AllArgsConstructor
@@ -99,19 +100,18 @@ public class QuestionService {
             return Collections.emptyMap();
         }
 
-        Map<Long, List<PassageMediaResponse>> mediaByPassageId = new HashMap<>();
-        for (Long passageId : passageIds) {
-            List<PassageMediaResponse> mediaResponses = passageMediaRepository.findByPassageId(passageId).stream()
-                    .map(m -> new PassageMediaResponse(
-                            m.getId(),
-                            m.getPassageId(),
-                            m.getMediaUrl(),
-                            m.getMediaType().name()
-                    ))
-                    .toList();
-            mediaByPassageId.put(passageId, mediaResponses);
-        }
-        return mediaByPassageId;
+        // 🚀 TỐI ƯU: Chỉ 1 câu Query duy nhất cho tất cả Passage
+        List<PassageMedia> allMedia = passageMediaRepository.findByPassageIdIn(passageIds);
+
+        // Dùng Stream API để nhóm (groupingBy) media theo passageId ngay trên RAM
+        return allMedia.stream()
+                .map(m -> new PassageMediaResponse(
+                        m.getId(),
+                        m.getPassageId(),
+                        m.getMediaUrl(),
+                        m.getMediaType().name()
+                ))
+                .collect(Collectors.groupingBy(PassageMediaResponse::getPassageId));
     }
 
     private QuestionResponse toUserQuestionResponse(
@@ -133,14 +133,22 @@ public class QuestionService {
             }
         }
 
-        List<PassageMediaResponse> passageMedia = question.getPassageId() == null
+        List<PassageMediaResponse> passageMedia = (question.getPassageId() == null)
                 ? List.of()
                 : mediaByPassageId.getOrDefault(question.getPassageId(), List.of());
 
-        List<AnswerResponse> answers = answersByQuestionId.getOrDefault(
+        // 🚀 Lấy danh sách đáp án và tạo bản sao để có thể xáo trộn
+        List<AnswerResponse> answers = new ArrayList<>(answersByQuestionId.getOrDefault(
                 question.getQuestionId(),
                 Collections.emptyList()
-        );
+        ));
+
+        // 🎲 CHỐNG QUAY CÓP: Tráo thứ tự các đáp án A, B, C, D
+        // Chỉ tráo đối với câu hỏi trắc nghiệm (MCQ)
+        // Nếu là câu hỏi điền từ (FILL_BLANK), ta giữ nguyên thứ tự
+        if (question.getQuestionType() == Question.QuestionType.MCQ) {
+            Collections.shuffle(answers);
+        }
 
         return QuestionResponse.builder()
                 .questionId(question.getQuestionId())
@@ -150,7 +158,7 @@ public class QuestionService {
                 .isBank(question.getIsBank())
                 .passage(passageResponse)
                 .passageMedia(passageMedia)
-                .answers(answers)
+                .answers(answers) // Danh sách đã được tráo đổi thứ tự
                 .build();
     }
 

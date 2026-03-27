@@ -82,8 +82,10 @@ public class UserService {
         long completedAttempts = userTestRepository.countByUserIdAndStatus(id, UserTest.Status.COMPLETED);
         long inProgressAttempts = userTestRepository.countByUserIdAndStatus(id, UserTest.Status.IN_PROGRESS);
 
-        Optional<Role> role = roleRepository.findByRoleId(user.getRoleId());
-        String roleName = role.get().getRoleName();
+        Role role = roleRepository.findByRoleId(user.getRoleId())
+                .orElseThrow(() -> new RuntimeException("Role not found"));
+
+        String roleName = role.getRoleName();
 
         Integer bestScore = userTestRepository.findTopByUserIdAndStatusOrderByTotalScoreDesc(id, UserTest.Status.COMPLETED)
                 .map(UserTest::getTotalScore)
