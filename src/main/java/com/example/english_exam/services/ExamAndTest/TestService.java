@@ -177,120 +177,103 @@ public class TestService {
 
     @Transactional
     public TestResponse getTestFullById(Long testId, HttpServletRequest httpRequest) {
-
+        // 1. Lấy thông tin người dùng và bài thi
         Long currentUserId = authUtils.getUserId(httpRequest);
-        if (currentUserId == null) {
-            throw new RuntimeException("Không xác định được người dùng.");
-        }
+        if (currentUserId == null) throw new RuntimeException("Không xác định được người dùng.");
 
-        Test test = testRepository.findById(testId)
-                .orElseThrow(() -> new RuntimeException("Test not found"));
-        long totalAttempts = userTestRepository.countByTestId(testId);
+        Test test = testRepository.findById(testId).orElseThrow(() -> new RuntimeException("Test not found"));
+        UserTest latest = userTestRepository.findTopByUserIdAndTestIdOrderByStartedAtDesc(currentUserId, testId).orElse(null);
 
-        // ================= AUTO SUBMIT IF TIME EXPIRED =================
-        UserTest latest = userTestRepository
-                .findTopByUserIdAndTestIdOrderByStartedAtDesc(currentUserId, testId)
-                .orElse(null);
+        // 2. Logic Auto-Submit
+        handleAutoSubmit(test, latest);
 
-        Integer duration = test.getDurationMinutes();
-
-// Chỉ xử lý auto submit khi có giới hạn thời gian hợp lệ
-        if (latest != null
-                && latest.getStatus() == UserTest.Status.IN_PROGRESS
-                && duration != null
-                && duration > 0) {
-
-            LocalDateTime now = LocalDateTime.now();
-            LocalDateTime endTime = latest.getStartedAt().plusMinutes(duration);
-
-            // Nếu có availableTo và nó sớm hơn endTime → dùng availableTo
-            if (test.getAvailableTo() != null
-                    && test.getAvailableTo().isBefore(endTime)) {
-                endTime = test.getAvailableTo();
-            }
-
-            // Nếu đã quá hạn → auto submit
-            if (!now.isBefore(endTime)) {
-                try {
-                    userTestService.submitTest(latest.getUserTestId());
-                } catch (Exception e) {
-                    latest.setStatus(UserTest.Status.COMPLETED);
-                    latest.setFinishedAt(endTime);
-                    userTestRepository.save(latest);
-                }
-            }
-        }
-
-        // ================= ATTEMPTS =================
-        int attemptsUsed = userTestRepository.countByUserIdAndTestIdAndStatus(
-                currentUserId, testId, UserTest.Status.COMPLETED);
-
+        // 3. Kiểm tra số lượt làm bài
+        int attemptsUsed = userTestRepository.countByUserIdAndTestIdAndStatus(currentUserId, testId, UserTest.Status.COMPLETED);
         Integer maxAttempts = test.getMaxAttempts();
         Integer remaining = (maxAttempts != null) ? Math.max(0, maxAttempts - attemptsUsed) : null;
+        long totalAttempts = userTestRepository.countByTestId(testId);
 
         if (maxAttempts != null && remaining <= 0) {
-
-            return TestResponse.builder()
-                    .testId(test.getTestId())
-                    .title(test.getTitle())
-                    .description(test.getDescription())
-                    .examTypeId(test.getExamTypeId())
-                    .createdBy(test.getCreatedBy())
-                    .createdAt(test.getCreatedAt())
-                    .bannerUrl(test.getBannerUrl())
-                    .durationMinutes(test.getDurationMinutes())
-                    .availableFrom(test.getAvailableFrom())
-                    .availableTo(test.getAvailableTo())
-                    .status("FORBIDDEN")
-                    .maxAttempts(maxAttempts)
-                    .attemptsUsed(attemptsUsed)
-                    .remainingAttempts(remaining)
-                    .totalAttempts(totalAttempts)
-                    .canDoTest(false)
-                    .parts(null)
-                    .build();
+            return buildLimitExceededResponse(test, attemptsUsed, remaining, totalAttempts);
         }
 
-        // ================= LOAD DATA HÀNG LOẠT =================
+        // 4. Load data
+        TestUserDataBundle data = loadUserTestData(testId);
+        if (data.testParts().isEmpty()) {
+            return buildEmptyUserTestResponse(test, maxAttempts, attemptsUsed, remaining);
+        }
+
+        // 5. Shuffle seed
+        long seed = (latest != null) ? latest.getUserTestId() : testId;
+
+        // 6. Build responses
+        List<TestPartResponse> partResponses = buildUserPartResponses(data, seed);
+
+        return buildUserTestResponse(test, maxAttempts, attemptsUsed, remaining, totalAttempts, partResponses);
+    }
+
+    // ================= USER VERSION REFACTORING =================
+
+    private record TestUserDataBundle(
+            List<TestPart> testParts,
+            Map<Long, List<TestQuestion>> questionsByPartId,
+            Map<Long, Question> questionMap,
+            Map<Long, Passage> passageMap,
+            Map<Long, List<AnswerResponse>> answersByQuestionId
+    ) {}
+
+    private TestUserDataBundle loadUserTestData(Long testId) {
         List<TestPart> testParts = testPartRepository.findByTestId(testId);
         if (testParts.isEmpty()) {
-            return buildEmptyTestResponse(test, maxAttempts, attemptsUsed, remaining);
+            return new TestUserDataBundle(
+                    Collections.emptyList(),
+                    Collections.emptyMap(),
+                    Collections.emptyMap(),
+                    Collections.emptyMap(),
+                    Collections.emptyMap()
+            );
         }
 
         List<Long> partIds = testParts.stream().map(TestPart::getTestPartId).toList();
-        List<TestQuestion> allTestQuestions = testQuestionRepository.findByTestPartIdIn(partIds);
-        Map<Long, List<TestQuestion>> questionsByPart = allTestQuestions.stream()
+        List<TestQuestion> allQuestions = testQuestionRepository.findByTestPartIdIn(partIds);
+        Map<Long, List<TestQuestion>> questionsByPartId = allQuestions.stream()
                 .collect(Collectors.groupingBy(TestQuestion::getTestPartId));
 
-        List<Long> questionIds = allTestQuestions.stream().map(TestQuestion::getQuestionId).distinct().toList();
+        List<Long> questionIds = allQuestions.stream()
+                .map(TestQuestion::getQuestionId).distinct().toList();
+
         Map<Long, Question> questionMap = questionRepository.findAllById(questionIds).stream()
                 .collect(Collectors.toMap(Question::getQuestionId, q -> q));
 
         Set<Long> passageIds = questionMap.values().stream()
-                .map(Question::getPassageId).filter(Objects::nonNull).collect(Collectors.toSet());
-
-        Map<Long, Passage> passageMap = passageIds.isEmpty() ? Collections.emptyMap() :
-                passageRepository.findAllById(passageIds).stream()
+                .map(Question::getPassageId).filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<Long, Passage> passageMap = passageIds.isEmpty()
+                ? Collections.emptyMap()
+                : passageRepository.findAllById(passageIds).stream()
                         .collect(Collectors.toMap(Passage::getPassageId, p -> p));
 
-        Map<Long, List<AnswerResponse>> answersByQuestionId = answerService.getAnswersForMultipleQuestions(questionIds);
+        Map<Long, List<AnswerResponse>> answersByQuestionId =
+                answerService.getAnswersForMultipleQuestions(questionIds);
 
-        // ================= BUILD RESPONSES (WITH GROUPING) =================
-        List<TestPartResponse> partResponses = testParts.stream().map(tp -> {
-            List<TestQuestion> tqList = questionsByPart.getOrDefault(tp.getTestPartId(), Collections.emptyList());
+        return new TestUserDataBundle(
+                testParts, questionsByPartId, questionMap, passageMap, answersByQuestionId
+        );
+    }
 
-            // Map để gom các câu hỏi vào nhóm theo passageId
-            // Key là passageId, hoặc questionId nếu là câu độc lập
+    private List<TestPartResponse> buildUserPartResponses(TestUserDataBundle data, long seed) {
+        Random random = new Random(seed);
+
+        return data.testParts().stream().map(tp -> {
+            List<TestQuestion> tqList = data.questionsByPartId()
+                    .getOrDefault(tp.getTestPartId(), Collections.emptyList());
+
             Map<String, QuestionGroupResponse> groupsMap = new LinkedHashMap<>();
 
             for (TestQuestion tq : tqList) {
-                Question q = questionMap.get(tq.getQuestionId());
+                Question q = data.questionMap().get(tq.getQuestionId());
                 if (q == null) continue;
 
-                List<AnswerResponse> answers = answersByQuestionId.getOrDefault(q.getQuestionId(), Collections.emptyList());
-
-                // Build Question DTO (để passage = null để tránh lặp dữ liệu trong JSON)
-                // Khởi tạo cho User
                 QuestionResponse qDto = QuestionResponse.builder()
                         .questionId(q.getQuestionId())
                         .examPartId(q.getExamPartId())
@@ -298,32 +281,33 @@ public class TestService {
                         .questionType(q.getQuestionType())
                         .isBank(q.getIsBank())
                         .testPartId(tp.getTestPartId())
-                        .answers(answers)
+                        .answers(data.answersByQuestionId().getOrDefault(q.getQuestionId(), Collections.emptyList()))
                         .build();
 
                 if (q.getPassageId() != null) {
-                    // Nhóm theo Passage
                     String groupKey = "P_" + q.getPassageId();
                     if (!groupsMap.containsKey(groupKey)) {
-                        Passage p = passageMap.get(q.getPassageId());
-                        PassageResponse pDto = (p != null) ? new PassageResponse(
-                                p.getPassageId(), p.getContent(), p.getMediaUrl(), p.getPassageType()) : null;
+                        Passage p = data.passageMap().get(q.getPassageId());
+                        PassageResponse pDto = (p != null)
+                                ? new PassageResponse(p.getPassageId(), p.getContent(), p.getMediaUrl(), p.getPassageType())
+                                : null;
                         groupsMap.put(groupKey, new QuestionGroupResponse(pDto, new ArrayList<>()));
                     }
                     groupsMap.get(groupKey).getQuestions().add(qDto);
                 } else {
-                    // Câu hỏi độc lập -> Mỗi câu là 1 nhóm riêng
-                    String groupKey = "Q_" + q.getQuestionId();
-                    groupsMap.put(groupKey, new QuestionGroupResponse(null, new ArrayList<>(List.of(qDto))));
+                    groupsMap.put("Q_" + q.getQuestionId(), new QuestionGroupResponse(null, new ArrayList<>(List.of(qDto))));
                 }
             }
 
-            // Chuyển Map thành List và SHUFFLE CÁC NHÓM
             List<QuestionGroupResponse> finalGroups = new ArrayList<>(groupsMap.values());
-            Collections.shuffle(finalGroups); // Chỉ shuffle các nhóm để đảm bảo câu hỏi cùng passage ko bị tách ra
-
+            Collections.shuffle(finalGroups, random);
             return new TestPartResponse(tp.getTestPartId(), tp.getExamPartId(), finalGroups);
         }).toList();
+    }
+
+    private TestResponse buildUserTestResponse(
+            Test test, Integer maxAttempts, int attemptsUsed, Integer remaining,
+            long totalAttempts, List<TestPartResponse> partResponses) {
 
         return TestResponse.builder()
                 .testId(test.getTestId())
@@ -346,10 +330,9 @@ public class TestService {
                 .build();
     }
 
+    // ================= END USER REFACTORING =================
 
-
-    // Hàm bổ trợ để build response trống
-    private TestResponse buildEmptyTestResponse(Test test, Integer maxAttempts, int attemptsUsed, Integer remaining) {
+    private TestResponse buildEmptyUserTestResponse(Test test, Integer maxAttempts, int attemptsUsed, Integer remaining) {
         long totalAttempts = userTestRepository.countByTestId(test.getTestId());
         return TestResponse.builder()
                 .testId(test.getTestId())
@@ -372,185 +355,171 @@ public class TestService {
                 .build();
     }
 
+    // Hàm bổ trợ để xử lý Auto-submit (Tách ra cho gọn code)
+private void handleAutoSubmit(Test test, UserTest latest) {
+    Integer duration = test.getDurationMinutes();
+    if (latest != null && latest.getStatus() == UserTest.Status.IN_PROGRESS && duration != null && duration > 0) {
+        LocalDateTime endTime = latest.getStartedAt().plusMinutes(duration);
+        if (test.getAvailableTo() != null && test.getAvailableTo().isBefore(endTime)) endTime = test.getAvailableTo();
+        
+        if (!LocalDateTime.now().isBefore(endTime)) {
+            try {
+                userTestService.submitTest(latest.getUserTestId());
+            } catch (Exception e) {
+                latest.setStatus(UserTest.Status.COMPLETED);
+                latest.setFinishedAt(endTime);
+                userTestRepository.save(latest);
+            }
+        }
+    }
+}
+
+// Hàm bổ trợ build Response khi hết lượt làm (Tách ra cho gọn)
+private TestResponse buildLimitExceededResponse(Test test, int used, Integer rem, long total) {
+    return TestResponse.builder()
+            .testId(test.getTestId()).title(test.getTitle()).description(test.getDescription())
+            .status("FORBIDDEN").maxAttempts(test.getMaxAttempts())
+            .attemptsUsed(used).remainingAttempts(rem).totalAttempts(total)
+            .canDoTest(false).build();
+}
+
+// ================= ADMIN VERSION REFACTORING =================
 
     public TestAdminResponse getTestFullByIdAdmin(Long testId) {
-
-        // ===== 1. LẤY TEST =====
         Test test = testRepository.findById(testId)
                 .orElseThrow(() -> new RuntimeException("Test not found"));
         long totalAttempts = userTestRepository.countByTestId(testId);
 
-        // ===== 2. LẤY TEST PARTS =====
-        List<TestPart> testParts = testPartRepository.findByTestId(test.getTestId());
+        TestAdminDataBundle data = loadAdminTestData(test.getTestId());
 
-        if (testParts.isEmpty()) {
-            return TestAdminResponse.builder()
-                    .testId(test.getTestId())
-                    .title(test.getTitle())
-                    .description(test.getDescription())
-                    .examTypeId(test.getExamTypeId())
-                    .createdBy(test.getCreatedBy())
-                    .createdAt(test.getCreatedAt())
-                    .bannerUrl(test.getBannerUrl())
-                    .durationMinutes(test.getDurationMinutes())
-                    .availableFrom(test.getAvailableFrom())
-                    .availableTo(test.getAvailableTo())
-                    .status(test.calculateStatus().name())
-                    .maxAttempts(test.getMaxAttempts())
-                    .totalAttempts(totalAttempts)
-                    .classId(test.getClassId())
-                    .parts(Collections.emptyList())
-                    .build();
+        if (data.testParts().isEmpty()) {
+            return buildEmptyAdminResponse(test, totalAttempts);
         }
 
-        List<Long> testPartIds = testParts.stream()
-                .map(TestPart::getTestPartId)
-                .toList();
+        List<TestPartAdminResponse> partResponses = buildAdminPartResponses(data);
 
-        // ===== 3. LOAD ALL TEST QUESTIONS =====
-        List<TestQuestion> allTestQuestions =
-                testQuestionRepository.findByTestPartIdIn(testPartIds);
+        return buildAdminTestResponse(test, totalAttempts, data, partResponses);
+    }
 
-        Map<Long, List<TestQuestion>> questionsByPartId =
-                allTestQuestions.stream()
-                        .collect(Collectors.groupingBy(TestQuestion::getTestPartId));
+    private record TestAdminDataBundle(
+            List<TestPart> testParts,
+            Map<Long, List<TestQuestion>> questionsByPartId,
+            Map<Long, Question> questionMap,
+            Map<Long, Passage> passageMap,
+            Map<Long, ExamPart> examPartMap,
+            Map<Long, List<AnswerAdminResponse>> answersByQuestionId
+    ) {}
 
-        // ===== 4. LOAD ALL QUESTIONS =====
-        List<Long> allQuestionIds = allTestQuestions.stream()
-                .map(TestQuestion::getQuestionId)
-                .toList();
+    private TestAdminDataBundle loadAdminTestData(Long testId) {
+        List<TestPart> testParts = testPartRepository.findByTestId(testId);
+        if (testParts.isEmpty()) {
+            return new TestAdminDataBundle(
+                    Collections.emptyList(),
+                    Collections.emptyMap(),
+                    Collections.emptyMap(),
+                    Collections.emptyMap(),
+                    Collections.emptyMap(),
+                    Collections.emptyMap()
+            );
+        }
 
-        Map<Long, Question> questionMap =
-                questionRepository.findAllById(allQuestionIds)
-                        .stream()
-                        .collect(Collectors.toMap(
-                                Question::getQuestionId,
-                                q -> q
-                        ));
+        List<Long> partIds = testParts.stream().map(TestPart::getTestPartId).toList();
+        List<TestQuestion> allQuestions = testQuestionRepository.findByTestPartIdIn(partIds);
+        Map<Long, List<TestQuestion>> questionsByPartId = allQuestions.stream()
+                .collect(Collectors.groupingBy(TestQuestion::getTestPartId));
 
-        // ===== 5. LOAD ALL PASSAGES =====
-        Set<Long> allPassageIds = questionMap.values().stream()
-                .map(Question::getPassageId)
-                .filter(Objects::nonNull)
+        List<Long> questionIds = allQuestions.stream()
+                .map(TestQuestion::getQuestionId).distinct().toList();
+
+        Map<Long, Question> questionMap = questionRepository.findAllById(questionIds).stream()
+                .collect(Collectors.toMap(Question::getQuestionId, q -> q));
+
+        Set<Long> passageIds = questionMap.values().stream()
+                .map(Question::getPassageId).filter(Objects::nonNull)
                 .collect(Collectors.toSet());
+        Map<Long, Passage> passageMap = passageRepository.findAllById(passageIds).stream()
+                .collect(Collectors.toMap(Passage::getPassageId, p -> p));
 
-        Map<Long, Passage> passageMap =
-                passageRepository.findAllById(allPassageIds)
-                        .stream()
-                        .collect(Collectors.toMap(
-                                Passage::getPassageId,
-                                p -> p
-                        ));
-
-        // ===== 6. LOAD ALL EXAM PARTS (FIX N+1) =====
         Set<Long> examPartIds = questionMap.values().stream()
-                .map(Question::getExamPartId)
-                .collect(Collectors.toSet());
+                .map(Question::getExamPartId).collect(Collectors.toSet());
+        Map<Long, ExamPart> examPartMap = examPartRepository.findAllById(examPartIds).stream()
+                .collect(Collectors.toMap(ExamPart::getExamPartId, e -> e));
 
-        Map<Long, ExamPart> examPartMap =
-                examPartRepository.findAllById(examPartIds)
-                        .stream()
-                        .collect(Collectors.toMap(
-                                ExamPart::getExamPartId,
-                                e -> e
-                        ));
-
-        // ===== 7. LOAD ALL ANSWERS =====
         Map<Long, List<AnswerAdminResponse>> answersByQuestionId =
-                answerService.getAnswersForMultipleQuestionsForAdmin(allQuestionIds);
+                answerService.getAnswersForMultipleQuestionsForAdmin(questionIds);
 
-        // ===== 8. BUILD RESPONSE IN MEMORY =====
-        List<TestPartAdminResponse> partResponses = testParts.stream()
-                .map(tp -> {
+        return new TestAdminDataBundle(
+                testParts, questionsByPartId, questionMap,
+                passageMap, examPartMap, answersByQuestionId
+        );
+    }
 
-                    List<TestQuestion> tqList =
-                            questionsByPartId.getOrDefault(
-                                    tp.getTestPartId(),
-                                    Collections.emptyList()
-                            );
+    private List<TestPartAdminResponse> buildAdminPartResponses(TestAdminDataBundle data) {
+        return data.testParts().stream().map(tp -> {
+            List<TestQuestion> tqList = data.questionsByPartId()
+                    .getOrDefault(tp.getTestPartId(), Collections.emptyList());
 
-                    // ===== GROUP QUESTIONS BY PASSAGE =====
-                    Map<Long, List<Question>> groupedByPassage =
-                            tqList.stream()
-                                    .map(tq -> questionMap.get(tq.getQuestionId()))
-                                    .filter(Objects::nonNull)
-                                    .collect(Collectors.groupingBy(
-                                            q -> q.getPassageId() == null
-                                                    ? -1L
-                                                    : q.getPassageId()
-                                    ));
+            Map<Long, List<Question>> groupedByPassage = tqList.stream()
+                    .map(tq -> data.questionMap().get(tq.getQuestionId()))
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.groupingBy(
+                            q -> q.getPassageId() == null ? -1L : q.getPassageId(),
+                            LinkedHashMap::new,
+                            Collectors.toList()
+                    ));
 
-                    List<QuestionGroupAdminResponse> groupResponses =
-                            groupedByPassage.entrySet()
-                                    .stream()
-                                    .map(entry -> {
+            List<QuestionGroupAdminResponse> groupResponses = groupedByPassage.entrySet().stream()
+                    .map(entry -> buildQuestionGroupAdmin(entry.getKey(), entry.getValue(), data))
+                    .toList();
 
-                                        Long passageId = entry.getKey();
-                                        List<Question> questionsInGroup = entry.getValue();
+            return new TestPartAdminResponse(tp.getTestPartId(), tp.getExamPartId(), groupResponses);
+        }).toList();
+    }
 
-                                        // ===== MAP PASSAGE =====
-                                        PassageResponse passageResponse = null;
+    private QuestionGroupAdminResponse buildQuestionGroupAdmin(
+            Long passageId, List<Question> questionsInGroup, TestAdminDataBundle data) {
 
-                                        if (!passageId.equals(-1L)) {
-                                            Passage p = passageMap.get(passageId);
-                                            if (p != null) {
-                                                passageResponse = new PassageResponse(
-                                                        p.getPassageId(),
-                                                        p.getContent(),
-                                                        p.getMediaUrl(),
-                                                        p.getPassageType()
-                                                );
-                                            }
-                                        }
+        PassageResponse passageResponse = null;
+        if (!passageId.equals(-1L)) {
+            Passage p = data.passageMap().get(passageId);
+            if (p != null) {
+                passageResponse = new PassageResponse(
+                        p.getPassageId(), p.getContent(), p.getMediaUrl(), p.getPassageType()
+                );
+            }
+        }
 
-                                        // ===== MAP QUESTIONS =====
-                                        List<QuestionAdminResponse> questionResponses =
-                                                questionsInGroup.stream()
-                                                        .map(q -> {
-
-                                                            List<AnswerAdminResponse> answers =
-                                                                    answersByQuestionId.getOrDefault(
-                                                                            q.getQuestionId(),
-                                                                            Collections.emptyList()
-                                                                    );
-
-                                                            Long examTypeId =
-                                                                    Optional.ofNullable(
-                                                                                    examPartMap.get(q.getExamPartId())
-                                                                            )
-                                                                            .map(ExamPart::getExamTypeId)
-                                                                            .orElse(null);
-
-                                                            return QuestionAdminResponse.builder()
-                                                                    .questionId(q.getQuestionId())
-                                                                    .examPartId(q.getExamPartId())
-                                                                    .questionText(q.getQuestionText())
-                                                                    .questionType(q.getQuestionType())
-                                                                    .explanation(q.getExplanation())
-                                                                    .examTypeId(examTypeId)
-                                                                    .classId(q.getClassId())
-                                                                    .isBank(q.getIsBank())
-                                                                    .answers(answers)
-                                                                    .build();
-                                                        })
-                                                        .toList();
-
-                                        return new QuestionGroupAdminResponse(
-                                                passageResponse,
-                                                questionResponses
-                                        );
-                                    })
-                                    .toList();
-
-                    return new TestPartAdminResponse(
-                            tp.getTestPartId(),
-                            tp.getExamPartId(),
-                            groupResponses
-                    );
-                })
+        List<QuestionAdminResponse> questionResponses = questionsInGroup.stream()
+                .map(q -> buildQuestionAdminResponse(q, data))
                 .toList();
 
-        // ===== 9. RETURN FINAL RESPONSE =====
+        return new QuestionGroupAdminResponse(passageResponse, questionResponses);
+    }
+
+    private QuestionAdminResponse buildQuestionAdminResponse(Question q, TestAdminDataBundle data) {
+        List<AnswerAdminResponse> answers = data.answersByQuestionId()
+                .getOrDefault(q.getQuestionId(), Collections.emptyList());
+
+        Long examTypeId = Optional.ofNullable(data.examPartMap().get(q.getExamPartId()))
+                .map(ExamPart::getExamTypeId).orElse(null);
+
+        return QuestionAdminResponse.builder()
+                .questionId(q.getQuestionId())
+                .examPartId(q.getExamPartId())
+                .questionText(q.getQuestionText())
+                .questionType(q.getQuestionType())
+                .explanation(q.getExplanation())
+                .examTypeId(examTypeId)
+                .classId(q.getClassId())
+                .isBank(q.getIsBank())
+                .answers(answers)
+                .build();
+    }
+
+    private TestAdminResponse buildAdminTestResponse(
+            Test test, long totalAttempts, TestAdminDataBundle data,
+            List<TestPartAdminResponse> partResponses) {
+
         return TestAdminResponse.builder()
                 .testId(test.getTestId())
                 .title(test.getTitle())
@@ -570,6 +539,30 @@ public class TestService {
                 .build();
     }
 
+    private TestAdminResponse buildEmptyAdminResponse(Test test, long totalAttempts) {
+        return TestAdminResponse.builder()
+                .testId(test.getTestId())
+                .title(test.getTitle())
+                .description(test.getDescription())
+                .examTypeId(test.getExamTypeId())
+                .createdBy(test.getCreatedBy())
+                .createdAt(test.getCreatedAt())
+                .bannerUrl(test.getBannerUrl())
+                .durationMinutes(test.getDurationMinutes())
+                .availableFrom(test.getAvailableFrom())
+                .availableTo(test.getAvailableTo())
+                .status(test.calculateStatus().name())
+                .maxAttempts(test.getMaxAttempts())
+                .totalAttempts(totalAttempts)
+                .classId(test.getClassId())
+                .parts(Collections.emptyList())
+                .build();
+    }
+
+    // ================= END ADMIN REFACTORING =================
+
+
+    
     public Map<String, Object> canStartTest(Long userId, Test test) {
         LocalDateTime now = LocalDateTime.now();
         Map<String, Object> result = new HashMap<>();
