@@ -75,17 +75,19 @@ public class UserTestService {
             return 0;
         }
 
-        // Tạo Set để lấy các ID câu hỏi duy nhất
         Set<Long> questionIds = userAnswers.stream()
                 .map(UserAnswer::getQuestionId)
                 .collect(Collectors.toSet());
 
-        // Lấy thông tin của các câu hỏi
+        int totalQuestions = questionIds.size();
+        if (totalQuestions == 0) {
+            return 0;
+        }
+
         Map<Long, Question> questionMap = questionRepository.findAllById(questionIds).stream()
                 .collect(Collectors.toMap(Question::getQuestionId, q -> q));
 
-        // Lấy thông tin đáp án đúng đầy đủ
-        Map<Long, Answer> correctAnswersMap = answerRepository.findByQuestionIdInAndIsCorrectTrue(new ArrayList<>(questionIds)) // Chuyển Set thành List
+        Map<Long, Answer> correctAnswersMap = answerRepository.findByQuestionIdInAndIsCorrectTrue(new ArrayList<>(questionIds))
                 .stream()
                 .collect(Collectors.toMap(Answer::getQuestionId, answer -> answer));
 
@@ -100,20 +102,24 @@ public class UserTestService {
             }
 
             boolean isCorrect = false;
-            // Kiểm tra đúng/sai dựa trên loại câu hỏi
             if (question.getQuestionType() == Question.QuestionType.MCQ) {
                 isCorrect = userAnswer.getSelectedAnswerId() != null &&
                         userAnswer.getSelectedAnswerId().equals(correctAnswer.getAnswerId());
             } else if (question.getQuestionType() == Question.QuestionType.FILL_BLANK) {
                 isCorrect = userAnswer.getAnswerText() != null &&
                         userAnswer.getAnswerText().trim().equalsIgnoreCase(correctAnswer.getAnswerText().trim());
+            } else if (question.getQuestionType() == Question.QuestionType.ESSAY) {
+                // ESSAY cần chấm tay, không tự động
+                continue;
             }
 
             if (isCorrect) {
                 correctCount++;
             }
         }
-        return correctCount;
+
+        // Tính điểm theo thang 100: (số câu đúng / tổng số câu) * 100
+        return (int) Math.round((double) correctCount / totalQuestions * 100);
     }
 
     private int scoreToeicOptimal(List<UserAnswer> userAnswers, Test test, ExamType examType) {
