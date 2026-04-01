@@ -567,35 +567,40 @@ public class QuestionService {
 
         List<Answer> list = new ArrayList<>();
 
-        if (questionType == Question.QuestionType.FILL_BLANK) {
-
-            AnswerRequest ar = answers.get(0);
-
-            Answer a = new Answer();
-            a.setQuestionId(questionId);
-            a.setAnswerText(ar.getAnswerText() != null ? ar.getAnswerText() : "");
-            a.setAnswerLabel(ar.getAnswerLabel() != null ? ar.getAnswerLabel() : "");
-            a.setIsCorrect(true);
-
-            list.add(a);
-
-        } else {
-
-            for (AnswerRequest ar : answers) {
-
-                Answer a = new Answer();
-                a.setQuestionId(questionId);
-
-                // 🔥 FIX 1: đảm bảo không null
-                a.setAnswerText(ar.getAnswerText() != null ? ar.getAnswerText() : "");
-
-                // 🔥 FIX 2: đảm bảo không null
-                a.setAnswerLabel(ar.getAnswerLabel() != null ? ar.getAnswerLabel() : "");
-
-                // 🔥 FIX 3: đảm bảo boolean không null
-                a.setIsCorrect(Boolean.TRUE.equals(ar.getIsCorrect()));
-
-                list.add(a);
+        switch (questionType) {
+            case ESSAY -> {
+                // ESSAY: user tự viết câu trả lời, không cần tạo đáp án trắc nghiệm
+                // Có thể lưu một đáp án mẫu nếu teacher muốn cung cấp gợi ý
+                if (answers != null && !answers.isEmpty()) {
+                    AnswerRequest ar = answers.get(0);
+                    Answer a = new Answer();
+                    a.setQuestionId(questionId);
+                    a.setAnswerText(ar.getAnswerText() != null ? ar.getAnswerText() : "");
+                    a.setAnswerLabel("SAMPLE_ANSWER");
+                    a.setIsCorrect(true);
+                    list.add(a);
+                }
+            }
+            case MCQ -> {
+                for (AnswerRequest ar : answers) {
+                    Answer a = new Answer();
+                    a.setQuestionId(questionId);
+                    a.setAnswerText(ar.getAnswerText() != null ? ar.getAnswerText() : "");
+                    a.setAnswerLabel(ar.getAnswerLabel() != null ? ar.getAnswerLabel() : "");
+                    a.setIsCorrect(Boolean.TRUE.equals(ar.getIsCorrect()));
+                    list.add(a);
+                }
+            }
+            default -> {
+                // fallback: xử lý như MCQ
+                for (AnswerRequest ar : answers) {
+                    Answer a = new Answer();
+                    a.setQuestionId(questionId);
+                    a.setAnswerText(ar.getAnswerText() != null ? ar.getAnswerText() : "");
+                    a.setAnswerLabel(ar.getAnswerLabel() != null ? ar.getAnswerLabel() : "");
+                    a.setIsCorrect(Boolean.TRUE.equals(ar.getIsCorrect()));
+                    list.add(a);
+                }
             }
         }
 
