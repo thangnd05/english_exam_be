@@ -11,6 +11,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -245,7 +246,51 @@ public class UserTestService {
     }
 
     public List<UserTestResponse> getAttemptsByUserAndTest(Long userId, Long testId) {
-        List<UserTest> list = userTestRepository.findByUserIdAndTestIdOrderByStartedAtDesc(userId, testId);
+
+        Test test = testRepository.findById(testId)
+                .orElseThrow(() -> new RuntimeException("Test not found"));
+    
+        boolean isUnlimited = test.getAvailableTo() == null;
+        boolean isEnded = test.calculateStatus() == TestStatus.ENDED;
+    
+        // ❌ chỉ chặn khi có giới hạn thời gian nhưng chưa hết
+        if (!isUnlimited && !isEnded) {
+            return Collections.emptyList();
+        }
+    
+        List<UserTest> list = userTestRepository
+                .findByUserIdAndTestIdOrderByStartedAtDesc(userId, testId);
+    
+        return list.stream().map(u -> UserTestResponse.builder()
+                .userTestId(u.getUserTestId())
+                .userId(u.getUserId())
+                .testId(u.getTestId())
+                .startedAt(u.getStartedAt())
+                .finishedAt(u.getFinishedAt())
+                .totalScore(u.getTotalScore())
+                .status(u.getStatus().name())
+                .durationTaken(
+                    u.getFinishedAt() != null
+                            ? Duration.between(u.getStartedAt(), u.getFinishedAt()).getSeconds()
+                            : null
+                )
+                .build()
+        ).collect(Collectors.toList());
+    }
+
+    public List<UserTestResponse> getAttemptsByTest(Long testId) {
+        Test test = testRepository.findById(testId)
+                .orElseThrow(() -> new RuntimeException("Test not found"));
+    
+        boolean isUnlimited = test.getAvailableTo() == null;
+        boolean isEnded = test.calculateStatus() == TestStatus.ENDED;
+    
+        // ❌ chỉ chặn khi có giới hạn thời gian nhưng chưa hết
+        if (!isUnlimited && !isEnded) {
+            return Collections.emptyList();
+        }
+    
+        List<UserTest> list = userTestRepository.findByTestIdOrderByTotalScoreDesc(testId);
         return list.stream().map(u -> UserTestResponse.builder()
                 .userTestId(u.getUserTestId())
                 .userId(u.getUserId())       // ✅ thêm
@@ -254,6 +299,7 @@ public class UserTestService {
                 .finishedAt(u.getFinishedAt())
                 .totalScore(u.getTotalScore())
                 .status(u.getStatus().name())
+                .durationTaken(u.getFinishedAt() != null ? Duration.between(u.getStartedAt(), u.getFinishedAt()).getSeconds() : null)
                 .build()
         ).collect(Collectors.toList());
     }
@@ -270,6 +316,7 @@ public class UserTestService {
                 .finishedAt(ut.getFinishedAt())
                 .totalScore(ut.getTotalScore())
                 .status(ut.getStatus().name())
+                .durationTaken(ut.getFinishedAt() != null ? Duration.between(ut.getStartedAt(), ut.getFinishedAt()).getSeconds() : null)
                 .build();
     }
 

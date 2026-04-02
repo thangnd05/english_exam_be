@@ -3,11 +3,15 @@ package com.example.english_exam.services.ExamAndTest;
 import com.example.english_exam.dto.response.ResultSummaryDto;
 import com.example.english_exam.models.Answer;
 import com.example.english_exam.models.Question;
+import com.example.english_exam.models.Test;
+import com.example.english_exam.models.TestStatus;
 import com.example.english_exam.models.UserAnswer;
 import com.example.english_exam.models.UserTest;
 import com.example.english_exam.repositories.*;
 import lombok.AllArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -18,7 +22,8 @@ public class UserAnswerService {
     private final UserAnswerRepository userAnswerRepository;
     private final QuestionRepository questionRepository;
     private final AnswerRepository answerRepository;
-    private final UserTestRepository userTestRepository ;
+    private final UserTestRepository userTestRepository;
+    private final TestRepository testRepository;
 
 
 
@@ -53,9 +58,23 @@ public class UserAnswerService {
 
     // ✅ PHƯƠNG THỨC LOGIC MỚI ĐƯỢC CHUYỂN VÀO ĐÂY
     public ResultSummaryDto getResultSummary(Long userTestId) {
+        UserTest userTest = userTestRepository.findById(userTestId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "UserTest not found"));
+
+        // ✅ Kiểm tra quyền xem kết quả dựa trên thời gian
+        Test test = testRepository.findById(userTest.getTestId())
+            .orElseThrow(() -> new RuntimeException("Test not found"));
+
+        boolean isUnlimited = test.getAvailableTo() == null;
+        boolean isEnded = test.calculateStatus() == TestStatus.ENDED;
+
+        if (!isUnlimited && !isEnded) {
+            return new ResultSummaryDto(0, 0, 0, 0);
+        }
+
         List<UserAnswer> userAnswers = userAnswerRepository.findByUserTestId(userTestId);
         if (userAnswers.isEmpty()) {
-            return new ResultSummaryDto(0, 0, 0,0);
+            return new ResultSummaryDto(0, 0, 0, 0);
         }
 
         Set<Long> questionIds = userAnswers.stream()
@@ -93,8 +112,8 @@ public class UserAnswerService {
 
         long totalQuestions = userAnswers.size();
         long wrongCount = totalQuestions - correctCount;
-        UserTest userTest = userTestRepository.findById(userTestId)
-                .orElseThrow(() -> new RuntimeException("UserTest not found"));
-        return new ResultSummaryDto(correctCount, wrongCount, totalQuestions,userTest.getTotalScore());
+        return new ResultSummaryDto(correctCount, wrongCount, totalQuestions, userTest.getTotalScore());
     }
+
+
 }

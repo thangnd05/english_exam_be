@@ -152,4 +152,12 @@ public class UserTestController {
         List<UserTestResponse> res = userTestService.getAttemptsByUserAndTest(userId, testId);
         return ResponseEntity.ok(res);
     }
+
+    @GetMapping("/by-test/{testId}")
+    public ResponseEntity<List<UserTestResponse>> getAttemptsTest(
+            @PathVariable Long testId) {
+
+        List<UserTestResponse> res = userTestService.getAttemptsByTest(testId);
+        return ResponseEntity.ok(res);
+    }
 }

@@ -16,4 +16,5 @@ public class UserTestResponse {
     private LocalDateTime finishedAt;
     private Integer totalScore;
     private String status;
+    private Long durationTaken; // Thời gian làm bài (giây) = finishedAt - startedAt
 }

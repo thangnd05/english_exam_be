@@ -26,6 +26,8 @@ public interface UserTestRepository extends JpaRepository<UserTest, Long> {
 
     List<UserTest> findByUserIdAndTestIdOrderByStartedAtDesc(Long userId, Long testId);
 
+    List<UserTest> findByTestIdOrderByTotalScoreDesc(Long testId);
+
 
     Optional<UserTest> findTopByUserIdAndTestIdOrderByStartedAtDesc(Long userId, Long testId);
     Optional<UserTest> findTopByUserIdOrderByStartedAtDesc(Long userId);
